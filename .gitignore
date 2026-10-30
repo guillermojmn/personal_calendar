@@ -1,0 +1,7 @@
+# Copias de seguridad exportadas (datos personales)
+calendario-*.json
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store

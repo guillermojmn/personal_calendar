@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mi Calendario</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="nav">
+      <button id="btnPrev" class="icon-btn" title="Mes anterior (←)" aria-label="Mes anterior">‹</button>
+      <button id="btnToday" class="btn" title="Ir a hoy (T)">Hoy</button>
+      <button id="btnNext" class="icon-btn" title="Mes siguiente (→)" aria-label="Mes siguiente">›</button>
+      <h1 id="monthTitle"></h1>
+    </div>
+    <div class="actions">
+      <input id="search" type="search" placeholder="Buscar…" aria-label="Buscar">
+      <button id="btnNew" class="btn primary" title="Nuevo (N)">+ Nuevo</button>
+      <div class="menu-wrap">
+        <button id="btnMenu" class="icon-btn" title="Más opciones" aria-label="Más opciones">⋯</button>
+        <div id="menu" class="menu" hidden>
+          <button id="btnExport">Exportar copia de seguridad</button>
+          <button id="btnImport">Importar copia de seguridad</button>
+          <button id="btnTheme">Cambiar tema claro/oscuro</button>
+        </div>
+      </div>
+      <input id="importFile" type="file" accept="application/json,.json" hidden>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="calendar">
+      <div class="weekdays">
+        <div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
+      </div>
+      <div id="grid" class="grid"></div>
+      <div id="legend" class="legend"></div>
+    </section>
+
+    <aside class="side">
+      <div class="panel">
+        <div class="panel-head">
+          <h2 id="dayTitle"></h2>
+          <button id="btnAddDay" class="btn small">+ Añadir</button>
+        </div>
+        <ul id="dayList" class="list"></ul>
+      </div>
+      <div class="panel">
+        <h2 id="upcomingTitle">Próximos 30 días</h2>
+        <ul id="upcomingList" class="list"></ul>
+      </div>
+    </aside>
+  </main>
+
+  <dialog id="dlg">
+    <form id="form">
+      <h2 id="dlgTitle">Nuevo</h2>
+      <label>Título
+        <input name="title" required maxlength="120" autocomplete="off" placeholder="Ej.: Dentista">
+      </label>
+      <div class="row">
+        <label>Tipo <select name="type"></select></label>
+        <label>Fecha <input type="date" name="date" required></label>
+      </div>
+      <label class="check"><input type="checkbox" name="allDay"> Todo el día</label>
+      <div class="row" id="timesRow">
+        <label>Desde <input type="time" name="start"></label>
+        <label>Hasta <input type="time" name="end"></label>
+      </div>
+      <div class="row">
+        <label>Repetir <select name="repeat"></select></label>
+        <label>Lugar <input name="location" maxlength="120" autocomplete="off"></label>
+      </div>
+      <label>Notas <textarea name="notes" rows="3"></textarea></label>
+      <p id="formError" class="form-error" hidden></p>
+      <div class="dlg-actions">
+        <button type="button" id="btnDelete" class="btn danger">Eliminar</button>
+        <span class="spacer"></span>
+        <button type="button" id="btnCancel" class="btn">Cancelar</button>
+        <button type="submit" class="btn primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
