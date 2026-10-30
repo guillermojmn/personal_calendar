@@ -1,37 +1,53 @@
 'use strict';
 
 const KEYS = {
+  events: 'personal-calendar:events',
+  habits: 'personal-calendar:habits',
+  habitLog: 'personal-calendar:habit-log',
+  theme: 'personal-calendar:theme',
+  view: 'personal-calendar:view',
+};
+
+// Storage keys and type ids used by earlier versions of the app.
+const LEGACY_KEYS = {
   events: 'calendario-personal:eventos',
   habits: 'calendario-personal:rutinas',
   habitLog: 'calendario-personal:rutinas-hechas',
-  theme: 'calendario-personal:tema',
-  view: 'calendario-personal:vista',
+};
+const LEGACY_TYPES = {
+  cita: 'appointment',
+  tarea: 'task',
+  recordatorio: 'reminder',
+  trabajo: 'work',
+  deporte: 'sport',
+  cumple: 'birthday',
+  otro: 'other',
 };
 
 const TYPES = {
-  cita: 'Cita',
-  tarea: 'Tarea',
-  recordatorio: 'Recordatorio',
-  trabajo: 'Trabajo',
+  appointment: 'Appointment',
+  task: 'Task',
+  reminder: 'Reminder',
+  work: 'Work',
   personal: 'Personal',
-  deporte: 'Deporte',
-  cumple: 'Cumpleaños',
-  otro: 'Otro',
+  sport: 'Sport',
+  birthday: 'Birthday',
+  other: 'Other',
 };
 
 const REPEATS = {
-  none: 'No se repite',
-  daily: 'Cada día',
-  weekly: 'Cada semana',
-  monthly: 'Cada mes',
-  yearly: 'Cada año',
+  none: 'Does not repeat',
+  daily: 'Every day',
+  weekly: 'Every week',
+  monthly: 'Every month',
+  yearly: 'Every year',
 };
 
 const VIEWS = ['month', 'week', 'day'];
 
-const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
-  'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+  'August', 'September', 'October', 'November', 'December'];
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const MAX_CHIPS = 3;
 const UPCOMING_DAYS = 30;
@@ -39,7 +55,7 @@ const HOUR_PX = 48;
 const DEFAULT_DURATION = 60;
 const MIN_VISUAL_DURATION = 30;
 
-// ---------- Utilidades de fechas (siempre en hora local) ----------
+// ---------- Date helpers (always local time) ----------
 
 const pad = (n) => String(n).padStart(2, '0');
 const toKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -49,7 +65,7 @@ const fromKey = (k) => {
 };
 const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 const todayKey = () => toKey(new Date());
-const weekStart = (d) => addDays(d, -((d.getDay() + 6) % 7)); // lunes
+const weekStart = (d) => addDays(d, -((d.getDay() + 6) % 7)); // Monday
 const toMin = (t) => {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
@@ -62,17 +78,17 @@ const nowMin = () => {
 
 function longDate(key) {
   const d = fromKey(key);
-  return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} de ${MONTHS[d.getMonth()]}`;
+  return `${WEEKDAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
 
 function relativeLabel(key) {
   const t = todayKey();
-  if (key === t) return 'Hoy';
-  if (key === toKey(addDays(fromKey(t), 1))) return 'Mañana';
+  if (key === t) return 'Today';
+  if (key === toKey(addDays(fromKey(t), 1))) return 'Tomorrow';
   return longDate(key);
 }
 
-// ---------- Almacenamiento ----------
+// ---------- Storage ----------
 
 function load(key, fallback) {
   try {
@@ -103,6 +119,12 @@ function isValidHabit(h) {
   return h && typeof h === 'object' && typeof h.id === 'string' && typeof h.title === 'string';
 }
 
+function normalizeEvent(e) {
+  if (LEGACY_TYPES[e.type]) e.type = LEGACY_TYPES[e.type];
+  if (!TYPES[e.type]) e.type = 'other';
+  return e;
+}
+
 function sanitizeLog(obj) {
   const out = {};
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return out;
@@ -113,10 +135,11 @@ function sanitizeLog(obj) {
 }
 
 const asArray = (x) => (Array.isArray(x) ? x : []);
+const loadWithLegacy = (name, fallback) => load(KEYS[name], null) ?? load(LEGACY_KEYS[name], fallback);
 
-let events = asArray(load(KEYS.events, [])).filter(isValidEvent);
-let habits = asArray(load(KEYS.habits, [])).filter(isValidHabit);
-let habitLog = sanitizeLog(load(KEYS.habitLog, {}));
+let events = asArray(loadWithLegacy('events', [])).filter(isValidEvent).map(normalizeEvent);
+let habits = asArray(loadWithLegacy('habits', [])).filter(isValidHabit);
+let habitLog = sanitizeLog(loadWithLegacy('habitLog', {}));
 
 function save() {
   const ok = [
@@ -124,7 +147,7 @@ function save() {
     store(KEYS.habits, habits),
     store(KEYS.habitLog, habitLog),
   ].every(Boolean);
-  if (!ok) alert('No se han podido guardar los cambios en este navegador. Exporta una copia de seguridad para no perderlos.');
+  if (!ok) alert('Your changes could not be saved in this browser. Export a backup so you don\'t lose them.');
 }
 
 function newId() {
@@ -132,7 +155,7 @@ function newId() {
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-// ---------- Eventos ----------
+// ---------- Events ----------
 
 function occursOn(ev, key) {
   if (key === ev.date) return true;
@@ -159,7 +182,7 @@ function eventsOn(key) {
   return events.filter((ev) => occursOn(ev, key)).sort(compareEvents);
 }
 
-// Las tareas repetidas se marcan como hechas por día; las normales, una sola vez.
+// Repeating tasks are marked done per day; one-off tasks just once.
 function isDone(ev, key) {
   if (!ev.repeat || ev.repeat === 'none') return !!ev.done;
   return (ev.doneOn || []).includes(key);
@@ -178,11 +201,11 @@ function toggleDone(ev, key) {
 }
 
 function timeLabel(ev) {
-  if (!isTimed(ev)) return 'Todo el día';
+  if (!isTimed(ev)) return 'All day';
   return ev.end ? `${ev.start} – ${ev.end}` : ev.start;
 }
 
-// ---------- Rutina diaria ----------
+// ---------- Daily routine ----------
 
 const habitsOn = (key) => habits.filter((h) => !h.since || key >= h.since);
 const habitDone = (h, key) => (habitLog[key] || []).includes(h.id);
@@ -204,7 +227,7 @@ function addHabit(title) {
 }
 
 function removeHabit(h) {
-  if (!confirm(`¿Quitar “${h.title}” de tu rutina diaria? Se borrará también su historial.`)) return;
+  if (!confirm(`Remove “${h.title}” from your daily routine? Its history will be deleted too.`)) return;
   habits = habits.filter((x) => x !== h);
   for (const key of Object.keys(habitLog)) {
     habitLog[key] = habitLog[key].filter((id) => id !== h.id);
@@ -214,7 +237,7 @@ function removeHabit(h) {
   render();
 }
 
-// ---------- Estado de la vista ----------
+// ---------- View state ----------
 
 let view = VIEWS.includes(load(KEYS.view, 'month')) ? load(KEYS.view, 'month') : 'month';
 let selected = todayKey();
@@ -252,19 +275,19 @@ function renderTitle() {
   if (view === 'month') {
     title = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
   } else if (view === 'day') {
-    title = `${longDate(selected)} de ${d.getFullYear()}`;
+    title = `${longDate(selected)}, ${d.getFullYear()}`;
   } else {
     const a = weekStart(d);
     const b = addDays(a, 6);
     title = a.getMonth() === b.getMonth()
-      ? `${a.getDate()} – ${b.getDate()} de ${MONTHS[b.getMonth()]} ${b.getFullYear()}`
-      : `${a.getDate()} ${MONTHS[a.getMonth()].slice(0, 3)} – ${b.getDate()} ${MONTHS[b.getMonth()].slice(0, 3)} ${b.getFullYear()}`;
+      ? `${MONTHS[a.getMonth()]} ${a.getDate()} – ${b.getDate()}, ${b.getFullYear()}`
+      : `${MONTHS[a.getMonth()].slice(0, 3)} ${a.getDate()} – ${MONTHS[b.getMonth()].slice(0, 3)} ${b.getDate()}, ${b.getFullYear()}`;
   }
   $('viewTitle').textContent = title;
 }
 
 function makeChip(ev, key, withTime) {
-  const chip = el('span', `chip t-${ev.type || 'otro'}`,
+  const chip = el('span', `chip t-${ev.type}`,
     withTime && isTimed(ev) ? `${ev.start} ${ev.title}` : ev.title);
   if (isDone(ev, key)) chip.classList.add('done');
   chip.title = `${ev.title} · ${timeLabel(ev)}`;
@@ -277,7 +300,7 @@ function makeChip(ev, key, withTime) {
   return chip;
 }
 
-// ----- Vista mes -----
+// ----- Month view -----
 
 function renderMonth() {
   const sel = fromKey(selected);
@@ -287,7 +310,7 @@ function renderMonth() {
   const today = todayKey();
 
   const head = el('div', 'weekdays');
-  for (const name of ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']) head.appendChild(el('div', null, name));
+  for (const name of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']) head.appendChild(el('div', null, name));
 
   const grid = el('div', 'grid');
   for (let i = 0; i < 42; i++) {
@@ -297,11 +320,11 @@ function renderMonth() {
     if (date.getMonth() !== m) cell.classList.add('other');
     if (key === today) cell.classList.add('today');
     if (key === selected) cell.classList.add('selected');
-    cell.title = 'Doble clic para añadir';
+    cell.title = 'Double-click to add';
 
     const top = el('div', 'day-top');
     const num = el('button', 'num', date.getDate());
-    num.title = 'Ver el día';
+    num.title = 'Open day';
     num.addEventListener('click', (e) => {
       e.stopPropagation();
       selected = key;
@@ -310,13 +333,13 @@ function renderMonth() {
     top.appendChild(num);
     const dayHabits = habitsOn(key);
     if (dayHabits.length && dayHabits.every((h) => habitDone(h, key))) {
-      top.appendChild(el('span', 'habit-ok', '✓')).title = 'Rutina diaria completada';
+      top.appendChild(el('span', 'habit-ok', '✓')).title = 'Daily routine completed';
     }
     cell.appendChild(top);
 
     const list = eventsOn(key);
     for (const ev of list.slice(0, MAX_CHIPS)) cell.appendChild(makeChip(ev, key, true));
-    if (list.length > MAX_CHIPS) cell.appendChild(el('span', 'more', `+${list.length - MAX_CHIPS} más`));
+    if (list.length > MAX_CHIPS) cell.appendChild(el('span', 'more', `+${list.length - MAX_CHIPS} more`));
 
     cell.addEventListener('click', () => selectDay(key));
     cell.addEventListener('dblclick', () => openForm(null, key));
@@ -325,9 +348,9 @@ function renderMonth() {
   $('view').replaceChildren(head, grid);
 }
 
-// ----- Vistas semana y día (rejilla horaria) -----
+// ----- Week and day views (time grid) -----
 
-// Reparte en columnas los eventos que se solapan.
+// Splits overlapping events into side-by-side columns.
 function layoutColumns(items) {
   items.sort((a, b) => a.s - b.s || b.e - a.e);
   const clusters = [];
@@ -373,7 +396,7 @@ function renderTimeGrid(keys) {
   body.style.height = `${24 * HOUR_PX}px`;
 
   head.appendChild(el('div'));
-  allDay.appendChild(el('div', 'tv-gutter-label', 'todo el día'));
+  allDay.appendChild(el('div', 'tv-gutter-label', 'all day'));
 
   const gutter = el('div', 'tv-gutter');
   for (let h = 1; h < 24; h++) {
@@ -390,7 +413,7 @@ function renderTimeGrid(keys) {
     if (key === today) dayHead.classList.add('today');
     if (key === selected) dayHead.classList.add('selected');
     dayHead.append(el('span', 'wd', WEEKDAYS[d.getDay()].slice(0, 3)), el('span', 'dn', d.getDate()));
-    dayHead.title = 'Ver el día';
+    dayHead.title = 'Open day';
     dayHead.addEventListener('click', () => {
       selected = key;
       setView('day');
@@ -417,7 +440,7 @@ function renderTimeGrid(keys) {
 
     for (const { ev, s, e, col: c, cols } of timed) {
       const height = ((e - s) / 60) * HOUR_PX - 2;
-      const box = el('div', `tev t-${ev.type || 'otro'}`);
+      const box = el('div', `tev t-${ev.type}`);
       if (height < 40) box.classList.add('compact');
       if (isDone(ev, key)) box.classList.add('done');
       box.style.top = `${(s / 60) * HOUR_PX}px`;
@@ -442,7 +465,7 @@ function renderTimeGrid(keys) {
       col.appendChild(line);
     }
 
-    col.title = 'Doble clic para añadir a esa hora';
+    col.title = 'Double-click to add at that time';
     col.addEventListener('click', () => selectDay(key));
     col.addEventListener('dblclick', (evt) => {
       const y = evt.clientY - col.getBoundingClientRect().top;
@@ -462,18 +485,18 @@ function renderTimeGrid(keys) {
   scroll.scrollTop = prevScroll ?? Math.max(0, defaultHour * HOUR_PX - 12);
 }
 
-// ----- Panel lateral -----
+// ----- Side panel -----
 
 function renderItem(ev, key, showDate) {
-  const li = el('li', `item t-${ev.type || 'otro'}`);
+  const li = el('li', `item t-${ev.type}`);
   const done = isDone(ev, key);
   if (done) li.classList.add('done');
 
-  if (ev.type === 'tarea') {
+  if (ev.type === 'task') {
     const cb = el('input');
     cb.type = 'checkbox';
     cb.checked = done;
-    cb.title = 'Marcar como hecha';
+    cb.title = 'Mark as done';
     cb.addEventListener('click', (e) => e.stopPropagation());
     cb.addEventListener('change', () => toggleDone(ev, key));
     li.appendChild(cb);
@@ -481,7 +504,7 @@ function renderItem(ev, key, showDate) {
 
   const body = el('div', 'body');
   body.appendChild(el('div', 'title', ev.title));
-  const meta = [showDate ? longDate(key) : null, timeLabel(ev), TYPES[ev.type] || TYPES.otro];
+  const meta = [showDate ? longDate(key) : null, timeLabel(ev), TYPES[ev.type]];
   if (ev.location) meta.push(`📍 ${ev.location}`);
   if (ev.repeat && ev.repeat !== 'none') meta.push(`🔁 ${REPEATS[ev.repeat]}`);
   body.appendChild(el('div', 'meta', meta.filter(Boolean).join(' · ')));
@@ -497,12 +520,12 @@ function renderItem(ev, key, showDate) {
 
 function renderDay() {
   const rel = relativeLabel(selected);
-  $('dayTitle').textContent = rel === 'Hoy' || rel === 'Mañana' ? `${rel} · ${longDate(selected)}` : rel;
+  $('dayTitle').textContent = rel === 'Today' || rel === 'Tomorrow' ? `${rel} · ${longDate(selected)}` : rel;
   const list = $('dayList');
   list.replaceChildren();
   const items = eventsOn(selected);
   if (!items.length) {
-    list.appendChild(el('li', 'empty', 'Nada apuntado. Pulsa “+ Añadir” o haz doble clic en el calendario.'));
+    list.appendChild(el('li', 'empty', 'Nothing planned. Click “+ Add” or double-click the calendar.'));
     return;
   }
   for (const ev of items) list.appendChild(renderItem(ev, selected, false));
@@ -517,7 +540,7 @@ function renderHabits() {
   $('habitBar').style.width = items.length ? `${(done / items.length) * 100}%` : '0';
 
   if (!items.length) {
-    list.appendChild(el('li', 'empty', 'Añade cosas que quieras hacer cada día y márcalas al cumplirlas.'));
+    list.appendChild(el('li', 'empty', 'Add things you want to do every day and tick them off as you go.'));
     return;
   }
   for (const h of items) {
@@ -531,8 +554,8 @@ function renderHabits() {
     label.append(cb, el('span', null, h.title));
     const remove = el('button', 'x', '×');
     remove.type = 'button';
-    remove.title = 'Quitar de la rutina';
-    remove.setAttribute('aria-label', `Quitar ${h.title}`);
+    remove.title = 'Remove from routine';
+    remove.setAttribute('aria-label', `Remove ${h.title}`);
     remove.addEventListener('click', () => removeHabit(h));
     li.append(label, remove);
     list.appendChild(li);
@@ -544,17 +567,17 @@ function renderUpcoming() {
   list.replaceChildren();
 
   if (query) {
-    $('upcomingTitle').textContent = 'Resultados de búsqueda';
+    $('upcomingTitle').textContent = 'Search results';
     const q = query.toLowerCase();
     const found = events
       .filter((ev) => [ev.title, ev.notes, ev.location].some((s) => s && s.toLowerCase().includes(q)))
       .sort((a, b) => a.date.localeCompare(b.date) || compareEvents(a, b));
-    if (!found.length) list.appendChild(el('li', 'empty', 'No hay coincidencias.'));
+    if (!found.length) list.appendChild(el('li', 'empty', 'No matches.'));
     for (const ev of found) list.appendChild(renderItem(ev, ev.date, true));
     return;
   }
 
-  $('upcomingTitle').textContent = `Próximos ${UPCOMING_DAYS} días`;
+  $('upcomingTitle').textContent = `Next ${UPCOMING_DAYS} days`;
   const start = fromKey(todayKey());
   let count = 0;
   for (let i = 0; i < UPCOMING_DAYS; i++) {
@@ -565,10 +588,10 @@ function renderUpcoming() {
     for (const ev of items) list.appendChild(renderItem(ev, key, false));
     count += items.length;
   }
-  if (!count) list.appendChild(el('li', 'empty', 'No tienes nada en los próximos días.'));
+  if (!count) list.appendChild(el('li', 'empty', 'Nothing coming up.'));
 }
 
-// ----- Navegación -----
+// ----- Navigation -----
 
 function selectDay(key) {
   if (key === selected) return;
@@ -595,7 +618,7 @@ function shift(n) {
   render();
 }
 
-// ---------- Formulario ----------
+// ---------- Form ----------
 
 const dlg = $('dlg');
 const form = $('form');
@@ -616,11 +639,11 @@ function syncAllDay() {
 function openForm(ev, key = selected, start = '') {
   editing = ev;
   const f = form.elements;
-  $('dlgTitle').textContent = ev ? 'Editar' : 'Nuevo';
+  $('dlgTitle').textContent = ev ? 'Edit' : 'New';
   $('btnDelete').hidden = !ev;
   $('formError').hidden = true;
   f.title.value = ev ? ev.title : '';
-  f.type.value = ev ? (ev.type || 'otro') : 'cita';
+  f.type.value = ev ? ev.type : 'appointment';
   f.date.value = ev ? ev.date : key;
   f.allDay.checked = ev ? !!ev.allDay : false;
   f.start.value = ev ? (ev.start || '') : start;
@@ -642,12 +665,12 @@ form.addEventListener('submit', (e) => {
   e.preventDefault();
   const f = form.elements;
   const title = f.title.value.trim();
-  if (!title) return showError('Ponle un título.');
-  if (!f.date.value) return showError('Elige una fecha.');
+  if (!title) return showError('Please add a title.');
+  if (!f.date.value) return showError('Please pick a date.');
   const allDay = f.allDay.checked;
   const start = allDay ? '' : f.start.value;
   const end = allDay || !start ? '' : f.end.value;
-  if (start && end && end < start) return showError('La hora de fin es anterior a la de inicio.');
+  if (start && end && end < start) return showError('The end time is before the start time.');
 
   const data = {
     title,
@@ -676,22 +699,22 @@ form.elements.allDay.addEventListener('change', syncAllDay);
 $('btnCancel').addEventListener('click', () => dlg.close());
 $('btnDelete').addEventListener('click', () => {
   if (!editing) return;
-  const extra = editing.repeat && editing.repeat !== 'none' ? ' (se borrarán todas las repeticiones)' : '';
-  if (!confirm(`¿Eliminar “${editing.title}”${extra}?`)) return;
+  const extra = editing.repeat && editing.repeat !== 'none' ? ' (all repetitions will be deleted)' : '';
+  if (!confirm(`Delete “${editing.title}”${extra}?`)) return;
   events = events.filter((ev) => ev !== editing);
   save();
   dlg.close();
   render();
 });
 
-// ---------- Copias de seguridad ----------
+// ---------- Backups ----------
 
 function exportData() {
   const data = { version: 2, events, habits, habitLog };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = el('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `calendario-${todayKey()}.json`;
+  a.download = `calendar-${todayKey()}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
@@ -709,15 +732,15 @@ function importData(file) {
     try {
       data = JSON.parse(reader.result);
     } catch {
-      return alert('El archivo no es una copia válida.');
+      return alert('This file is not a valid backup.');
     }
-    // Las copias antiguas eran solo una lista de eventos.
+    // The first backup format was a plain list of events.
     const src = Array.isArray(data) ? { events: data } : (data && typeof data === 'object' ? data : {});
-    const newEvents = asArray(src.events).filter(isValidEvent);
+    const newEvents = asArray(src.events).filter(isValidEvent).map(normalizeEvent);
     const newHabits = asArray(src.habits).filter(isValidHabit);
     const newLog = sanitizeLog(src.habitLog);
-    if (!newEvents.length && !newHabits.length) return alert('El archivo no contiene datos.');
-    if (!confirm(`Se van a importar ${newEvents.length} eventos y ${newHabits.length} rutinas, combinándolos con lo que ya tienes. ¿Continuar?`)) return;
+    if (!newEvents.length && !newHabits.length) return alert('This file contains no data.');
+    if (!confirm(`Import ${newEvents.length} events and ${newHabits.length} routine items, merging them with your current data?`)) return;
 
     events = mergeById(events, newEvents);
     habits = mergeById(habits, newHabits);
@@ -730,28 +753,17 @@ function importData(file) {
   reader.readAsText(file);
 }
 
-// ---------- Tema ----------
-
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-}
-
-function initTheme() {
-  const saved = load(KEYS.theme, null);
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  applyTheme(saved === 'dark' || saved === 'light' ? saved : (prefersDark ? 'dark' : 'light'));
-}
+// ---------- Theme ----------
 
 function toggleTheme() {
   const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-  applyTheme(next);
+  document.documentElement.dataset.theme = next;
   store(KEYS.theme, next);
 }
 
-// ---------- Arranque ----------
+// ---------- Startup ----------
 
 function init() {
-  initTheme();
   fillSelect(form.elements.type, TYPES);
   fillSelect(form.elements.repeat, REPEATS);
 
@@ -805,12 +817,12 @@ function init() {
     else if (e.key === 'ArrowRight') shift(1);
     else if (k === 't') { selected = todayKey(); render(); }
     else if (k === 'm') setView('month');
-    else if (k === 's') setView('week');
+    else if (k === 'w') setView('week');
     else if (k === 'd') setView('day');
     else if (k === 'n') { e.preventDefault(); openForm(null); }
   });
 
-  // Cada minuto: mueve la línea de "ahora" y, pasada la medianoche, actualiza "hoy".
+  // Every minute: move the "now" line and refresh "today" after midnight.
   let lastToday = todayKey();
   setInterval(() => {
     if (dlg.open) return;

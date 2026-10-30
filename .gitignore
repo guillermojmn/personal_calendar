@@ -1,7 +1,8 @@
-# Copias de seguridad exportadas (datos personales)
+# Exported backups (personal data)
+calendar-*.json
 calendario-*.json
 
-# Sistema
+# OS files
 Thumbs.db
 desktop.ini
 .DS_Store

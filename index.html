@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mi Calendario</title>
+  <title>Personal Calendar</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
   <link rel="stylesheet" href="styles.css">
   <script>
-    // Aplica el tema antes de pintar para evitar parpadeos.
+    // Apply the theme before first paint to avoid a flash.
     (function () {
       var t = null;
-      try { t = JSON.parse(localStorage.getItem('calendario-personal:tema')); } catch (e) {}
+      try { t = JSON.parse(localStorage.getItem('personal-calendar:theme')); } catch (e) {}
       if (t !== 'dark' && t !== 'light') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       document.documentElement.dataset.theme = t;
     })();
@@ -19,25 +19,25 @@
 <body>
   <header class="topbar">
     <div class="nav">
-      <button id="btnPrev" class="icon-btn" title="Anterior (←)" aria-label="Anterior">‹</button>
-      <button id="btnToday" class="btn" title="Ir a hoy (T)">Hoy</button>
-      <button id="btnNext" class="icon-btn" title="Siguiente (→)" aria-label="Siguiente">›</button>
+      <button id="btnPrev" class="icon-btn" title="Previous (←)" aria-label="Previous">‹</button>
+      <button id="btnToday" class="btn" title="Go to today (T)">Today</button>
+      <button id="btnNext" class="icon-btn" title="Next (→)" aria-label="Next">›</button>
       <h1 id="viewTitle"></h1>
     </div>
     <div class="actions">
-      <div class="seg" role="group" aria-label="Vista">
-        <button data-view="month" title="Vista mes (M)">Mes</button>
-        <button data-view="week" title="Vista semana (S)">Semana</button>
-        <button data-view="day" title="Vista día (D)">Día</button>
+      <div class="seg" role="group" aria-label="View">
+        <button data-view="month" title="Month view (M)">Month</button>
+        <button data-view="week" title="Week view (W)">Week</button>
+        <button data-view="day" title="Day view (D)">Day</button>
       </div>
-      <input id="search" type="search" placeholder="Buscar…" aria-label="Buscar">
-      <button id="btnNew" class="btn primary" title="Nuevo (N)">+ Nuevo</button>
+      <input id="search" type="search" placeholder="Search…" aria-label="Search">
+      <button id="btnNew" class="btn primary" title="New (N)">+ New</button>
       <div class="menu-wrap">
-        <button id="btnMenu" class="icon-btn" title="Más opciones" aria-label="Más opciones">⋯</button>
+        <button id="btnMenu" class="icon-btn" title="More options" aria-label="More options">⋯</button>
         <div id="menu" class="menu" hidden>
-          <button id="btnExport">Exportar copia de seguridad</button>
-          <button id="btnImport">Importar copia de seguridad</button>
-          <button id="btnTheme">Cambiar tema claro/oscuro</button>
+          <button id="btnExport">Export backup</button>
+          <button id="btnImport">Import backup</button>
+          <button id="btnTheme">Toggle light/dark theme</button>
         </div>
       </div>
       <input id="importFile" type="file" accept="application/json,.json" hidden>
@@ -54,25 +54,25 @@
       <div class="panel">
         <div class="panel-head">
           <h2 id="dayTitle"></h2>
-          <button id="btnAddDay" class="btn small">+ Añadir</button>
+          <button id="btnAddDay" class="btn small">+ Add</button>
         </div>
         <ul id="dayList" class="list"></ul>
       </div>
 
       <div class="panel">
         <div class="panel-head">
-          <h2>Rutina diaria <span id="habitCount" class="habit-count"></span></h2>
+          <h2>Daily routine <span id="habitCount" class="habit-count"></span></h2>
         </div>
         <div class="progress"><div id="habitBar"></div></div>
         <ul id="habitList" class="list"></ul>
         <form id="habitForm" class="habit-form">
-          <input name="title" maxlength="80" autocomplete="off" placeholder="Ej.: Beber 2 L de agua" aria-label="Nueva rutina">
-          <button class="btn small" type="submit">Añadir</button>
+          <input name="title" maxlength="80" autocomplete="off" placeholder="e.g. Drink 2 L of water" aria-label="New routine item">
+          <button class="btn small" type="submit">Add</button>
         </form>
       </div>
 
       <div class="panel">
-        <h2 id="upcomingTitle">Próximos 30 días</h2>
+        <h2 id="upcomingTitle">Next 30 days</h2>
         <ul id="upcomingList" class="list"></ul>
       </div>
     </aside>
@@ -80,30 +80,30 @@
 
   <dialog id="dlg">
     <form id="form">
-      <h2 id="dlgTitle">Nuevo</h2>
-      <label>Título
-        <input name="title" required maxlength="120" autocomplete="off" placeholder="Ej.: Boxeo">
+      <h2 id="dlgTitle">New</h2>
+      <label>Title
+        <input name="title" required maxlength="120" autocomplete="off" placeholder="e.g. Boxing">
       </label>
       <div class="row">
-        <label>Tipo <select name="type"></select></label>
-        <label>Fecha <input type="date" name="date" required></label>
+        <label>Type <select name="type"></select></label>
+        <label>Date <input type="date" name="date" required></label>
       </div>
-      <label class="check"><input type="checkbox" name="allDay"> Todo el día</label>
+      <label class="check"><input type="checkbox" name="allDay"> All day</label>
       <div class="row" id="timesRow">
-        <label>Desde <input type="time" name="start"></label>
-        <label>Hasta <input type="time" name="end"></label>
+        <label>From <input type="time" name="start"></label>
+        <label>To <input type="time" name="end"></label>
       </div>
       <div class="row">
-        <label>Repetir <select name="repeat"></select></label>
-        <label>Lugar <input name="location" maxlength="120" autocomplete="off"></label>
+        <label>Repeat <select name="repeat"></select></label>
+        <label>Location <input name="location" maxlength="120" autocomplete="off"></label>
       </div>
-      <label>Notas <textarea name="notes" rows="3"></textarea></label>
+      <label>Notes <textarea name="notes" rows="3"></textarea></label>
       <p id="formError" class="form-error" hidden></p>
       <div class="dlg-actions">
-        <button type="button" id="btnDelete" class="btn danger">Eliminar</button>
+        <button type="button" id="btnDelete" class="btn danger">Delete</button>
         <span class="spacer"></span>
-        <button type="button" id="btnCancel" class="btn">Cancelar</button>
-        <button type="submit" class="btn primary">Guardar</button>
+        <button type="button" id="btnCancel" class="btn">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
       </div>
     </form>
   </dialog>

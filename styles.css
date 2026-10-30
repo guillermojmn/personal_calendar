@@ -12,14 +12,14 @@
   --today: #4f46e5;
   --shadow: 0 1px 3px rgba(20, 24, 40, .08), 0 8px 24px rgba(20, 24, 40, .06);
 
-  --t-cita: #2563eb;
-  --t-tarea: #16a34a;
-  --t-recordatorio: #d97706;
-  --t-trabajo: #0891b2;
+  --t-appointment: #2563eb;
+  --t-task: #16a34a;
+  --t-reminder: #d97706;
+  --t-work: #0891b2;
   --t-personal: #9333ea;
-  --t-deporte: #ea580c;
-  --t-cumple: #db2777;
-  --t-otro: #64748b;
+  --t-sport: #ea580c;
+  --t-birthday: #db2777;
+  --t-other: #64748b;
 }
 
 :root[data-theme="dark"] {
@@ -36,14 +36,14 @@
   --today: #818cf8;
   --shadow: 0 1px 3px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
 
-  --t-cita: #60a5fa;
-  --t-tarea: #4ade80;
-  --t-recordatorio: #fbbf24;
-  --t-trabajo: #22d3ee;
+  --t-appointment: #60a5fa;
+  --t-task: #4ade80;
+  --t-reminder: #fbbf24;
+  --t-work: #22d3ee;
   --t-personal: #c084fc;
-  --t-deporte: #fb923c;
-  --t-cumple: #f472b6;
-  --t-otro: #94a3b8;
+  --t-sport: #fb923c;
+  --t-birthday: #f472b6;
+  --t-other: #94a3b8;
 }
 
 * { box-sizing: border-box; }
@@ -59,7 +59,7 @@ body {
 
 button, input, select, textarea { font: inherit; color: inherit; }
 
-/* ---------- Barra superior ---------- */
+/* ---------- Top bar ---------- */
 .topbar {
   display: flex;
   flex-wrap: wrap;
@@ -184,7 +184,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .day.other { opacity: .45; }
 .day.selected { border-color: var(--accent); }
 .day-top { display: flex; align-items: center; gap: 4px; }
-.habit-ok { font-size: .75rem; font-weight: 700; color: var(--t-tarea); margin-left: auto; padding-right: 2px; }
+.habit-ok { font-size: .75rem; font-weight: 700; color: var(--t-task); margin-left: auto; padding-right: 2px; }
 .day .num {
   border: 0;
   background: none;
@@ -202,7 +202,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .day.today .num { background: var(--today); color: var(--accent-text); }
 
 .chip {
-  --tc: var(--t-otro);
+  --tc: var(--t-other);
   display: block;
   font-size: .75rem;
   padding: 2px 6px;
@@ -235,7 +235,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   vertical-align: -1px;
 }
 
-/* ---------- Vistas semana / día ---------- */
+/* ---------- Week / day views ---------- */
 .calendar { overflow-x: auto; }
 .tv-row { display: grid; }
 .tv-head, .tv-allday { overflow-y: hidden; scrollbar-gutter: stable; }
@@ -275,7 +275,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tv-col.today { background-color: color-mix(in srgb, var(--accent) 5%, transparent); }
 
 .tev {
-  --tc: var(--t-otro);
+  --tc: var(--t-other);
   position: absolute;
   border-radius: 6px;
   padding: 3px 6px;
@@ -298,7 +298,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .now { position: absolute; left: 0; right: 0; height: 2px; background: var(--danger); z-index: 3; pointer-events: none; }
 .now::before { content: ""; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--danger); }
 
-/* ---------- Panel lateral ---------- */
+/* ---------- Side panel ---------- */
 .side { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .panel { padding: 16px; }
 .panel h2 { margin: 0 0 12px; font-size: 1rem; font-weight: 650; }
@@ -319,7 +319,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .list .empty { color: var(--muted); font-size: .9rem; }
 
 .item {
-  --tc: var(--t-otro);
+  --tc: var(--t-other);
   display: flex;
   gap: 10px;
   align-items: flex-start;
@@ -337,22 +337,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .item.done .title { text-decoration: line-through; opacity: .6; }
 .item .meta { font-size: .8rem; color: var(--muted); overflow-wrap: anywhere; }
 
-.t-cita { --tc: var(--t-cita); }
-.t-tarea { --tc: var(--t-tarea); }
-.t-recordatorio { --tc: var(--t-recordatorio); }
-.t-trabajo { --tc: var(--t-trabajo); }
+.t-appointment { --tc: var(--t-appointment); }
+.t-task { --tc: var(--t-task); }
+.t-reminder { --tc: var(--t-reminder); }
+.t-work { --tc: var(--t-work); }
 .t-personal { --tc: var(--t-personal); }
-.t-deporte { --tc: var(--t-deporte); }
-.t-cumple { --tc: var(--t-cumple); }
-.t-otro { --tc: var(--t-otro); }
+.t-sport { --tc: var(--t-sport); }
+.t-birthday { --tc: var(--t-birthday); }
+.t-other { --tc: var(--t-other); }
 
-/* Rutina diaria */
+/* Daily routine */
 .habit-count { font-weight: 500; color: var(--muted); font-size: .85rem; margin-left: 4px; }
 .progress { height: 6px; background: var(--surface-2); border-radius: 99px; overflow: hidden; margin-bottom: 12px; }
-.progress div { height: 100%; width: 0; background: var(--t-tarea); transition: width .25s; }
+.progress div { height: 100%; width: 0; background: var(--t-task); transition: width .25s; }
 .habit { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--surface-2); }
 .habit label { flex: 1; display: flex; align-items: center; gap: 10px; cursor: pointer; min-width: 0; overflow-wrap: anywhere; }
-.habit input { accent-color: var(--t-tarea); width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; }
+.habit input { accent-color: var(--t-task); width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; }
 .habit.done label span { text-decoration: line-through; opacity: .6; }
 .habit .x { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 2px 6px; border-radius: 6px; opacity: 0; }
 .habit:hover .x, .habit .x:focus-visible { opacity: 1; }
@@ -361,7 +361,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .habit-form { display: flex; gap: 6px; margin-top: 10px; }
 .habit-form input { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
 
-/* ---------- Diálogo ---------- */
+/* ---------- Dialog ---------- */
 dialog {
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -391,7 +391,7 @@ dialog::backdrop { background: rgba(10, 12, 20, .45); }
 .dlg-actions { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
 .spacer { flex: 1; }
 
-/* ---------- Móvil ---------- */
+/* ---------- Mobile ---------- */
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; padding: 12px 16px; }
   .day { min-height: 64px; padding: 4px; }
