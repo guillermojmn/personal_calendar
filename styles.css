@@ -263,14 +263,17 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tv-gutter-label { font-size: .68rem; color: var(--muted); align-self: center; text-align: right; padding-right: 8px; }
 .tv-allday-cell { padding: 4px 2px; min-height: 30px; display: flex; flex-direction: column; gap: 2px; min-width: 0; border-left: 1px solid var(--border); }
 
-.tv-scroll { overflow-y: auto; height: clamp(360px, calc(100vh - 250px), 1152px); scrollbar-gutter: stable; }
+.tv-scroll { overflow-y: auto; height: max(480px, calc(100vh - 250px)); scrollbar-gutter: stable; }
+.tv-body { height: 100%; min-height: calc(var(--hours) * 30px); }
 .tv-gutter { position: relative; }
 .tv-gutter span { position: absolute; right: 8px; transform: translateY(-50%); font-size: .72rem; color: var(--muted); }
+.tv-gutter span:first-child { transform: none; }
+.tv-gutter span:last-child { transform: translateY(-100%); }
 .tv-col {
   position: relative;
   border-left: 1px solid var(--border);
   background-image: linear-gradient(to bottom, var(--border) 1px, transparent 1px);
-  background-size: 100% var(--hour);
+  background-size: 100% calc(100% / var(--hours));
 }
 .tv-col.today { background-color: color-mix(in srgb, var(--accent) 5%, transparent); }
 

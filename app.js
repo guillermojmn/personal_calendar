@@ -51,7 +51,10 @@ const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 
 const MAX_CHIPS = 3;
 const UPCOMING_DAYS = 30;
-const HOUR_PX = 48;
+// Visible hours in week/day views; the grid stretches to fill the screen.
+const DAY_START = 7 * 60;
+const DAY_END = 23 * 60;
+const DAY_SPAN = DAY_END - DAY_START;
 const DEFAULT_DURATION = 60;
 const MIN_VISUAL_DURATION = 30;
 
@@ -383,25 +386,24 @@ function renderTimeGrid(keys) {
   const prevScroll = container.querySelector('.tv-scroll')?.scrollTop;
   const today = todayKey();
   const columns = `56px repeat(${keys.length}, minmax(0, 1fr))`;
-  let earliest = 24 * 60;
+  const pct = (min) => `${((min - DAY_START) / DAY_SPAN) * 100}%`;
 
   const tv = el('div', `tv ${keys.length > 1 ? 'tv-week' : 'tv-single'}`);
-  tv.style.setProperty('--hour', `${HOUR_PX}px`);
+  tv.style.setProperty('--hours', DAY_SPAN / 60);
 
   const head = el('div', 'tv-row tv-head');
   const allDay = el('div', 'tv-row tv-allday');
   const scroll = el('div', 'tv-scroll');
   const body = el('div', 'tv-row tv-body');
   for (const row of [head, allDay, body]) row.style.gridTemplateColumns = columns;
-  body.style.height = `${24 * HOUR_PX}px`;
 
   head.appendChild(el('div'));
   allDay.appendChild(el('div', 'tv-gutter-label', 'all day'));
 
   const gutter = el('div', 'tv-gutter');
-  for (let h = 1; h < 24; h++) {
-    const label = el('span', null, `${pad(h)}:00`);
-    label.style.top = `${h * HOUR_PX}px`;
+  for (let m = DAY_START; m <= DAY_END; m += 60) {
+    const label = el('span', null, toTime(m));
+    label.style.top = pct(m);
     gutter.appendChild(label);
   }
   body.appendChild(gutter);
@@ -430,21 +432,21 @@ function renderTimeGrid(keys) {
         allDayCell.appendChild(makeChip(ev, key, false));
         continue;
       }
-      const s = toMin(ev.start);
-      const realEnd = ev.end ? toMin(ev.end) : s + DEFAULT_DURATION;
-      const e = Math.min(24 * 60, Math.max(realEnd, s + MIN_VISUAL_DURATION));
+      // Items outside the visible hours are pinned to the top or bottom edge.
+      const start = toMin(ev.start);
+      const realEnd = ev.end ? toMin(ev.end) : start + DEFAULT_DURATION;
+      const s = Math.min(Math.max(start, DAY_START), DAY_END - MIN_VISUAL_DURATION);
+      const e = Math.min(DAY_END, Math.max(realEnd, s + MIN_VISUAL_DURATION));
       timed.push({ ev, s, e });
-      earliest = Math.min(earliest, s);
     }
     layoutColumns(timed);
 
     for (const { ev, s, e, col: c, cols } of timed) {
-      const height = ((e - s) / 60) * HOUR_PX - 2;
       const box = el('div', `tev t-${ev.type}`);
-      if (height < 40) box.classList.add('compact');
+      if (e - s < 50) box.classList.add('compact');
       if (isDone(ev, key)) box.classList.add('done');
-      box.style.top = `${(s / 60) * HOUR_PX}px`;
-      box.style.height = `${height}px`;
+      box.style.top = pct(s);
+      box.style.height = `calc(${((e - s) / DAY_SPAN) * 100}% - 2px)`;
       box.style.left = `calc(${(c / cols) * 100}% + 2px)`;
       box.style.width = `calc(${100 / cols}% - 4px)`;
       box.title = `${ev.title} · ${timeLabel(ev)}${ev.location ? ` · ${ev.location}` : ''}`;
@@ -459,17 +461,18 @@ function renderTimeGrid(keys) {
       col.appendChild(box);
     }
 
-    if (key === today) {
+    if (key === today && nowMin() >= DAY_START && nowMin() <= DAY_END) {
       const line = el('div', 'now');
-      line.style.top = `${(nowMin() / 60) * HOUR_PX}px`;
+      line.style.top = pct(nowMin());
       col.appendChild(line);
     }
 
     col.title = 'Double-click to add at that time';
     col.addEventListener('click', () => selectDay(key));
     col.addEventListener('dblclick', (evt) => {
-      const y = evt.clientY - col.getBoundingClientRect().top;
-      const min = Math.min(23 * 60 + 30, Math.max(0, Math.floor((y / HOUR_PX) * 2) * 30));
+      const rect = col.getBoundingClientRect();
+      const offset = ((evt.clientY - rect.top) / rect.height) * DAY_SPAN;
+      const min = Math.min(DAY_END - 30, DAY_START + Math.max(0, Math.floor(offset / 30) * 30));
       openForm(null, key, toTime(min));
     });
 
@@ -480,9 +483,7 @@ function renderTimeGrid(keys) {
   scroll.appendChild(body);
   tv.append(head, allDay, scroll);
   container.replaceChildren(tv);
-
-  const defaultHour = Math.max(0, Math.min(7, Math.floor(earliest / 60) - 1));
-  scroll.scrollTop = prevScroll ?? Math.max(0, defaultHour * HOUR_PX - 12);
+  if (prevScroll) scroll.scrollTop = prevScroll;
 }
 
 // ----- Side panel -----
