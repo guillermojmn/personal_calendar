@@ -6,16 +6,30 @@
   <title>Mi Calendario</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
   <link rel="stylesheet" href="styles.css">
+  <script>
+    // Aplica el tema antes de pintar para evitar parpadeos.
+    (function () {
+      var t = null;
+      try { t = JSON.parse(localStorage.getItem('calendario-personal:tema')); } catch (e) {}
+      if (t !== 'dark' && t !== 'light') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
 </head>
 <body>
   <header class="topbar">
     <div class="nav">
-      <button id="btnPrev" class="icon-btn" title="Mes anterior (←)" aria-label="Mes anterior">‹</button>
+      <button id="btnPrev" class="icon-btn" title="Anterior (←)" aria-label="Anterior">‹</button>
       <button id="btnToday" class="btn" title="Ir a hoy (T)">Hoy</button>
-      <button id="btnNext" class="icon-btn" title="Mes siguiente (→)" aria-label="Mes siguiente">›</button>
-      <h1 id="monthTitle"></h1>
+      <button id="btnNext" class="icon-btn" title="Siguiente (→)" aria-label="Siguiente">›</button>
+      <h1 id="viewTitle"></h1>
     </div>
     <div class="actions">
+      <div class="seg" role="group" aria-label="Vista">
+        <button data-view="month" title="Vista mes (M)">Mes</button>
+        <button data-view="week" title="Vista semana (S)">Semana</button>
+        <button data-view="day" title="Vista día (D)">Día</button>
+      </div>
       <input id="search" type="search" placeholder="Buscar…" aria-label="Buscar">
       <button id="btnNew" class="btn primary" title="Nuevo (N)">+ Nuevo</button>
       <div class="menu-wrap">
@@ -32,10 +46,7 @@
 
   <main class="layout">
     <section class="calendar">
-      <div class="weekdays">
-        <div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
-      </div>
-      <div id="grid" class="grid"></div>
+      <div id="view"></div>
       <div id="legend" class="legend"></div>
     </section>
 
@@ -47,6 +58,19 @@
         </div>
         <ul id="dayList" class="list"></ul>
       </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Rutina diaria <span id="habitCount" class="habit-count"></span></h2>
+        </div>
+        <div class="progress"><div id="habitBar"></div></div>
+        <ul id="habitList" class="list"></ul>
+        <form id="habitForm" class="habit-form">
+          <input name="title" maxlength="80" autocomplete="off" placeholder="Ej.: Beber 2 L de agua" aria-label="Nueva rutina">
+          <button class="btn small" type="submit">Añadir</button>
+        </form>
+      </div>
+
       <div class="panel">
         <h2 id="upcomingTitle">Próximos 30 días</h2>
         <ul id="upcomingList" class="list"></ul>
@@ -58,7 +82,7 @@
     <form id="form">
       <h2 id="dlgTitle">Nuevo</h2>
       <label>Título
-        <input name="title" required maxlength="120" autocomplete="off" placeholder="Ej.: Dentista">
+        <input name="title" required maxlength="120" autocomplete="off" placeholder="Ej.: Boxeo">
       </label>
       <div class="row">
         <label>Tipo <select name="type"></select></label>
