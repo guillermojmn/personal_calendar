@@ -249,6 +249,7 @@ let query = '';
 // ---------- DOM ----------
 
 const $ = (id) => document.getElementById(id);
+const isTouch = () => window.matchMedia('(hover: none)').matches;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -278,7 +279,9 @@ function renderTitle() {
   if (view === 'month') {
     title = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
   } else if (view === 'day') {
-    title = `${longDate(selected)}, ${d.getFullYear()}`;
+    title = window.matchMedia('(max-width: 600px)').matches
+      ? `${WEEKDAYS[d.getDay()].slice(0, 3)}, ${MONTHS[d.getMonth()].slice(0, 3)} ${d.getDate()}, ${d.getFullYear()}`
+      : `${longDate(selected)}, ${d.getFullYear()}`;
   } else {
     const a = weekStart(d);
     const b = addDays(a, 6);
@@ -344,7 +347,11 @@ function renderMonth() {
     for (const ev of list.slice(0, MAX_CHIPS)) cell.appendChild(makeChip(ev, key, true));
     if (list.length > MAX_CHIPS) cell.appendChild(el('span', 'more', `+${list.length - MAX_CHIPS} more`));
 
-    cell.addEventListener('click', () => selectDay(key));
+    // On touch screens, tapping the selected day again opens it.
+    cell.addEventListener('click', () => {
+      if (isTouch() && key === selected) setView('day');
+      else selectDay(key);
+    });
     cell.addEventListener('dblclick', () => openForm(null, key));
     grid.appendChild(cell);
   }
@@ -385,7 +392,7 @@ function renderTimeGrid(keys) {
   const container = $('view');
   const prevScroll = container.querySelector('.tv-scroll')?.scrollTop;
   const today = todayKey();
-  const columns = `56px repeat(${keys.length}, minmax(0, 1fr))`;
+  const columns = `var(--gutter) repeat(${keys.length}, minmax(0, 1fr))`;
   const pct = (min) => `${((min - DAY_START) / DAY_SPAN) * 100}%`;
 
   const tv = el('div', `tv ${keys.length > 1 ? 'tv-week' : 'tv-single'}`);
@@ -467,14 +474,19 @@ function renderTimeGrid(keys) {
       col.appendChild(line);
     }
 
-    col.title = 'Double-click to add at that time';
-    col.addEventListener('click', () => selectDay(key));
-    col.addEventListener('dblclick', (evt) => {
+    const slotAt = (evt) => {
       const rect = col.getBoundingClientRect();
       const offset = ((evt.clientY - rect.top) / rect.height) * DAY_SPAN;
-      const min = Math.min(DAY_END - 30, DAY_START + Math.max(0, Math.floor(offset / 30) * 30));
-      openForm(null, key, toTime(min));
+      return toTime(Math.min(DAY_END - 30, DAY_START + Math.max(0, Math.floor(offset / 30) * 30)));
+    };
+    col.title = 'Double-click to add at that time';
+    // On touch screens: in day view a tap adds at that time; in week view a second tap opens the day.
+    col.addEventListener('click', (evt) => {
+      if (isTouch() && view === 'day') openForm(null, key, slotAt(evt));
+      else if (isTouch() && key === selected) setView('day');
+      else selectDay(key);
     });
+    col.addEventListener('dblclick', (evt) => openForm(null, key, slotAt(evt)));
 
     allDay.appendChild(allDayCell);
     body.appendChild(col);
@@ -778,6 +790,20 @@ function init() {
     render();
   });
   $('btnNew').addEventListener('click', () => openForm(null));
+  $('fab').addEventListener('click', () => openForm(null));
+
+  // Swipe left/right on the calendar to move to the next/previous period.
+  let touchStart = null;
+  $('view').addEventListener('touchstart', (e) => {
+    touchStart = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+  }, { passive: true });
+  $('view').addEventListener('touchend', (e) => {
+    if (!touchStart) return;
+    const dx = e.changedTouches[0].clientX - touchStart.x;
+    const dy = e.changedTouches[0].clientY - touchStart.y;
+    touchStart = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) shift(dx < 0 ? 1 : -1);
+  }, { passive: true });
   $('btnAddDay').addEventListener('click', () => openForm(null, selected));
   for (const b of document.querySelectorAll('.seg button')) {
     b.addEventListener('click', () => setView(b.dataset.view));
@@ -809,6 +835,8 @@ function init() {
     if (e.target.files[0]) importData(e.target.files[0]);
     e.target.value = '';
   });
+
+  window.matchMedia('(max-width: 600px)').addEventListener('change', renderTitle);
 
   document.addEventListener('keydown', (e) => {
     if (dlg.open || e.ctrlKey || e.metaKey || e.altKey) return;

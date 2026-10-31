@@ -395,18 +395,89 @@ dialog::backdrop { background: rgba(10, 12, 20, .45); }
 .spacer { flex: 1; }
 
 /* ---------- Mobile ---------- */
+/* ---------- Mobile ---------- */
+.fab { display: none; }
+.layout > * { min-width: 0; }
+.tv { --gutter: 56px; }
+
 @media (max-width: 900px) {
-  .layout { grid-template-columns: 1fr; padding: 12px 16px; }
+  .layout { grid-template-columns: 1fr; gap: 16px; padding: 12px 16px calc(96px + env(safe-area-inset-bottom)); }
   .day { min-height: 64px; padding: 4px; }
   .day .chip { font-size: 0; padding: 0; height: 6px; border-left: 0; background: var(--tc); }
-  .tv-week { min-width: 640px; }
   .more { display: none; }
+  .tv-scroll { height: max(420px, calc(100vh - 260px)); height: max(420px, calc(100dvh - 260px)); }
+  .fab {
+    display: grid;
+    place-items: center;
+    position: fixed;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    width: 56px;
+    height: 56px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-text);
+    font-size: 1.9rem;
+    line-height: 1;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .3);
+    cursor: pointer;
+    z-index: 10;
+  }
+  #btnNew { display: none; }
 }
+
 @media (max-width: 600px) {
-  .topbar { padding: 10px 16px; }
-  .actions { width: 100%; }
+  .topbar { gap: 10px; padding: max(10px, env(safe-area-inset-top)) 12px 10px; }
+  .nav { width: 100%; gap: 6px; }
+  .nav h1 { order: -1; flex: 1; min-width: 0; margin: 0; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; }
+  .nav .btn { padding: 6px 10px; }
+  .icon-btn { width: 34px; height: 34px; }
+  .actions { width: 100%; gap: 8px; }
+  .seg button { padding: 7px 10px; }
   #search { flex: 1; width: auto; min-width: 0; }
-  .nav h1 { font-size: 1.1rem; }
-  .row { grid-template-columns: 1fr; }
+
+  .layout { padding-left: 12px; padding-right: 12px; }
+  .calendar { padding: 8px; border-radius: 12px; }
+  .panel { padding: 14px; border-radius: 12px; }
+
+  /* Month */
+  .weekdays div { font-size: .68rem; letter-spacing: 0; padding-bottom: 6px; }
   .grid { gap: 2px; }
+  .day { min-height: 52px; padding: 3px; border-radius: 8px; }
+  .day .num { width: 22px; height: 22px; font-size: .8rem; }
+  .legend { display: none; }
+
+  /* Week / day */
+  .tv { --gutter: 38px; }
+  .tv-gutter span { right: 4px; font-size: .62rem; }
+  .tv-gutter-label { padding-right: 4px; font-size: .58rem; }
+  .tv-day { padding: 2px 0 4px; }
+  .tv-day .wd { font-size: .62rem; letter-spacing: 0; }
+  .tv-day .dn { width: 28px; height: 28px; font-size: .95rem; }
+  .tv-allday-cell { padding: 3px 1px; }
+  .tv-week .chip { font-size: .62rem; padding: 1px 3px; border-left-width: 2px; }
+  .tv-week .tev { padding: 2px; font-size: .64rem; border-left-width: 2px; border-radius: 4px; }
+  .tv-week .tev.compact { display: block; }
+  .tv-week .tev-title { white-space: normal; overflow-wrap: normal; text-overflow: clip; line-height: 1.15; max-width: none; }
+  .tv-week .tev-time { display: none; }
+
+  /* Side panel */
+  .item { padding: 10px; }
+  .habit { padding: 8px; }
+
+  /* Dialog as a bottom sheet */
+  dialog {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+    margin: auto 0 0;
+    border-radius: 16px 16px 0 0;
+    border-bottom: 0;
+  }
+  #form { padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+  .dlg-actions .btn { padding: 10px 14px; }
+
+  /* 16px inputs stop iOS from zooming in on focus */
+  #form input:not([type="checkbox"]), #form select, #form textarea, #search, .habit-form input { font-size: 16px; }
 }
