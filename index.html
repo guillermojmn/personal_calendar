@@ -64,6 +64,23 @@
 
       <div class="panel">
         <div class="panel-head">
+          <h2>To do <span id="todoCount" class="habit-count"></span></h2>
+        </div>
+        <form id="todoForm" class="todo-form">
+          <input name="title" maxlength="160" autocomplete="off" placeholder="Something to remember…" aria-label="New to-do">
+          <input name="due" type="date" title="Due date (optional)" aria-label="Due date (optional)">
+          <button class="btn small" type="submit">Add</button>
+        </form>
+        <ul id="todoList" class="list"></ul>
+        <details id="todoDone" class="todo-done" hidden>
+          <summary id="todoDoneSummary"></summary>
+          <ul id="todoDoneList" class="list"></ul>
+          <button id="btnClearDone" class="link-btn" type="button">Clear done</button>
+        </details>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
           <h2>Daily routine <span id="habitCount" class="habit-count"></span></h2>
         </div>
         <div class="progress"><div id="habitBar"></div></div>

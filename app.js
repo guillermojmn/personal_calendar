@@ -4,6 +4,7 @@ const KEYS = {
   events: 'personal-calendar:events',
   habits: 'personal-calendar:habits',
   habitLog: 'personal-calendar:habit-log',
+  todos: 'personal-calendar:todos',
   theme: 'personal-calendar:theme',
   view: 'personal-calendar:view',
 };
@@ -122,6 +123,10 @@ function isValidHabit(h) {
   return h && typeof h === 'object' && typeof h.id === 'string' && typeof h.title === 'string';
 }
 
+function isValidTodo(t) {
+  return isValidHabit(t) && (!t.due || isDateKey(t.due));
+}
+
 function normalizeEvent(e) {
   if (LEGACY_TYPES[e.type]) e.type = LEGACY_TYPES[e.type];
   if (!TYPES[e.type]) e.type = 'other';
@@ -143,12 +148,14 @@ const loadWithLegacy = (name, fallback) => load(KEYS[name], null) ?? load(LEGACY
 let events = asArray(loadWithLegacy('events', [])).filter(isValidEvent).map(normalizeEvent);
 let habits = asArray(loadWithLegacy('habits', [])).filter(isValidHabit);
 let habitLog = sanitizeLog(loadWithLegacy('habitLog', {}));
+let todos = asArray(load(KEYS.todos, [])).filter(isValidTodo);
 
 function save() {
   const ok = [
     store(KEYS.events, events),
     store(KEYS.habits, habits),
     store(KEYS.habitLog, habitLog),
+    store(KEYS.todos, todos),
   ].every(Boolean);
   if (!ok) alert('Your changes could not be saved in this browser. Export a backup so you don\'t lose them.');
 }
@@ -240,6 +247,50 @@ function removeHabit(h) {
   render();
 }
 
+// ---------- To do ----------
+// One-off things to remember, optionally with a due date; separate from the daily routine.
+
+let editingTodo = null;
+
+function addTodo(title, due) {
+  todos.push({ id: newId(), title, due: due || '', done: false, createdAt: Date.now() });
+  save();
+  renderTodos();
+}
+
+function toggleTodo(t) {
+  t.done = !t.done;
+  t.doneAt = t.done ? Date.now() : null;
+  save();
+  renderTodos();
+}
+
+function removeTodo(t) {
+  todos = todos.filter((x) => x !== t);
+  save();
+  renderTodos();
+}
+
+// Dated items first (overdue at the top), then undated ones in the order they were added.
+function compareTodos(a, b) {
+  if (!!a.due !== !!b.due) return a.due ? -1 : 1;
+  return (a.due || '').localeCompare(b.due || '') || (a.createdAt || 0) - (b.createdAt || 0);
+}
+
+function shortDate(key) {
+  const d = fromKey(key);
+  return `${WEEKDAYS[d.getDay()].slice(0, 3)}, ${MONTHS[d.getMonth()].slice(0, 3)} ${d.getDate()}`;
+}
+
+function dueInfo(t) {
+  if (!t.due) return null;
+  const today = todayKey();
+  if (t.due === today) return { text: 'Today', cls: 'today' };
+  if (t.due < today && !t.done) return { text: `Overdue · ${shortDate(t.due)}`, cls: 'overdue' };
+  if (t.due === toKey(addDays(fromKey(today), 1))) return { text: 'Tomorrow', cls: '' };
+  return { text: shortDate(t.due), cls: '' };
+}
+
 // ---------- View state ----------
 
 let view = VIEWS.includes(load(KEYS.view, 'month')) ? load(KEYS.view, 'month') : 'month';
@@ -269,6 +320,7 @@ function render() {
     renderTimeGrid(Array.from({ length: 7 }, (_, i) => toKey(addDays(start, i))));
   } else renderTimeGrid([selected]);
   renderDay();
+  renderTodos();
   renderHabits();
   renderUpcoming();
 }
@@ -604,6 +656,89 @@ function renderUpcoming() {
   if (!count) list.appendChild(el('li', 'empty', 'Nothing coming up.'));
 }
 
+function renderTodoItem(t) {
+  const li = el('li', 'todo');
+  if (t.done) li.classList.add('done');
+
+  if (editingTodo === t.id) {
+    const f = el('form', 'todo-edit');
+    const title = el('input');
+    title.value = t.title;
+    title.maxLength = 160;
+    title.setAttribute('aria-label', 'Edit to-do');
+    const due = el('input');
+    due.type = 'date';
+    due.value = t.due || '';
+    due.setAttribute('aria-label', 'Due date (optional)');
+    const ok = el('button', 'btn small', 'Save');
+    f.append(title, due, ok);
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const value = title.value.trim();
+      if (value) {
+        t.title = value;
+        t.due = due.value;
+        save();
+      }
+      editingTodo = null;
+      renderTodos();
+    });
+    f.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        editingTodo = null;
+        renderTodos();
+      }
+    });
+    li.appendChild(f);
+    setTimeout(() => title.focus(), 0);
+    return li;
+  }
+
+  const cb = el('input');
+  cb.type = 'checkbox';
+  cb.checked = !!t.done;
+  cb.title = 'Mark as done';
+  cb.addEventListener('change', () => toggleTodo(t));
+
+  const body = el('div', 'body');
+  const title = el('div', 'todo-title', t.title);
+  title.title = 'Click to edit';
+  title.addEventListener('click', () => {
+    editingTodo = t.id;
+    renderTodos();
+  });
+  body.appendChild(title);
+  const due = dueInfo(t);
+  if (due) body.appendChild(el('div', `due ${due.cls}`.trim(), due.text));
+
+  const remove = el('button', 'x', '×');
+  remove.type = 'button';
+  remove.title = 'Delete';
+  remove.setAttribute('aria-label', `Delete ${t.title}`);
+  remove.addEventListener('click', () => removeTodo(t));
+
+  li.append(cb, body, remove);
+  return li;
+}
+
+function renderTodos() {
+  const pending = todos.filter((t) => !t.done).sort(compareTodos);
+  const done = todos.filter((t) => t.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+  $('todoCount').textContent = pending.length ? String(pending.length) : '';
+
+  const list = $('todoList');
+  list.replaceChildren();
+  if (!pending.length) list.appendChild(el('li', 'empty', 'Nothing pending. Jot down anything you need to remember.'));
+  for (const t of pending) list.appendChild(renderTodoItem(t));
+
+  $('todoDone').hidden = !done.length;
+  $('todoDoneSummary').textContent = `Done (${done.length})`;
+  const doneList = $('todoDoneList');
+  doneList.replaceChildren();
+  for (const t of done) doneList.appendChild(renderTodoItem(t));
+}
+
 // ----- Navigation -----
 
 function selectDay(key) {
@@ -723,7 +858,7 @@ $('btnDelete').addEventListener('click', () => {
 // ---------- Backups ----------
 
 function exportData() {
-  const data = { version: 2, events, habits, habitLog };
+  const data = { version: 3, events, habits, habitLog, todos };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = el('a');
   a.href = URL.createObjectURL(blob);
@@ -752,11 +887,13 @@ function importData(file) {
     const newEvents = asArray(src.events).filter(isValidEvent).map(normalizeEvent);
     const newHabits = asArray(src.habits).filter(isValidHabit);
     const newLog = sanitizeLog(src.habitLog);
-    if (!newEvents.length && !newHabits.length) return alert('This file contains no data.');
-    if (!confirm(`Import ${newEvents.length} events and ${newHabits.length} routine items, merging them with your current data?`)) return;
+    const newTodos = asArray(src.todos).filter(isValidTodo);
+    if (!newEvents.length && !newHabits.length && !newTodos.length) return alert('This file contains no data.');
+    if (!confirm(`Import ${newEvents.length} events, ${newTodos.length} to-dos and ${newHabits.length} routine items, merging them with your current data?`)) return;
 
     events = mergeById(events, newEvents);
     habits = mergeById(habits, newHabits);
+    todos = mergeById(todos, newTodos);
     for (const [k, ids] of Object.entries(newLog)) {
       habitLog[k] = [...new Set([...(habitLog[k] || []), ...ids])];
     }
@@ -811,6 +948,22 @@ function init() {
   $('search').addEventListener('input', (e) => {
     query = e.target.value.trim();
     renderUpcoming();
+  });
+
+  $('todoForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = e.target.elements;
+    const title = f.title.value.trim();
+    if (!title) return;
+    addTodo(title, f.due.value);
+    f.title.value = '';
+    f.due.value = '';
+    f.title.focus();
+  });
+  $('btnClearDone').addEventListener('click', () => {
+    todos = todos.filter((t) => !t.done);
+    save();
+    renderTodos();
   });
 
   $('habitForm').addEventListener('submit', (e) => {

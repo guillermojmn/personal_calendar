@@ -10,6 +10,7 @@ A simple personal calendar for appointments, tasks, reminders and a daily routin
 - **Repeating events** — daily, weekly, monthly or yearly (e.g. a class every Tuesday at 19:00).
 - **Color-coded types:** appointment, task, reminder, work, personal, sport, birthday…
 - **Tasks** with a checkbox to mark them as done.
+- **To do:** a quick list for things you remember and don't want to forget — optionally with a due date. Overdue items are highlighted, and done items are kept in a collapsible list.
 - **Daily routine:** things to do every day (e.g. drink 2 L of water), with a progress bar. The month view shows a ✓ on days you completed it.
 - **Search** by title, notes or location.
 - Light / dark theme and mobile-friendly layout.
