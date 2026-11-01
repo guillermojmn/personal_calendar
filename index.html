@@ -20,6 +20,45 @@
   </script>
 </head>
 <body>
+  <div id="loading" class="loading">Loading…</div>
+
+  <div id="auth" class="auth" hidden>
+    <form id="loginForm" class="auth-card" hidden>
+      <div class="auth-logo">📅</div>
+      <h1>Personal Calendar</h1>
+      <p class="auth-sub">Sign in to continue</p>
+      <label>Email
+        <input type="email" name="email" autocomplete="username" required>
+      </label>
+      <label>Password
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <p id="loginMsg" class="auth-msg" hidden></p>
+      <button class="btn primary" type="submit">Sign in</button>
+      <button id="btnForgot" class="link-btn" type="button">Forgot your password?</button>
+    </form>
+
+    <form id="recoveryForm" class="auth-card" hidden>
+      <div class="auth-logo">🔑</div>
+      <h1>Set a new password</h1>
+      <label>New password
+        <input type="password" name="password" autocomplete="new-password" minlength="8" required>
+      </label>
+      <label>Repeat password
+        <input type="password" name="confirm" autocomplete="new-password" minlength="8" required>
+      </label>
+      <p id="recoveryMsg" class="auth-msg" hidden></p>
+      <button class="btn primary" type="submit">Save password</button>
+    </form>
+
+    <div id="configError" class="auth-card" hidden>
+      <div class="auth-logo">⚙️</div>
+      <h1>Not configured</h1>
+      <p class="auth-sub">The app can't reach its database. Check that <code>config.js</code> is present (see the README).</p>
+    </div>
+  </div>
+
+  <div id="app" hidden>
   <header class="topbar">
     <div class="nav">
       <button id="btnPrev" class="icon-btn" title="Previous (←)" aria-label="Previous">‹</button>
@@ -38,9 +77,11 @@
       <div class="menu-wrap">
         <button id="btnMenu" class="icon-btn" title="More options" aria-label="More options">⋯</button>
         <div id="menu" class="menu" hidden>
+          <div id="menuUser" class="menu-user"></div>
           <button id="btnExport">Export backup</button>
           <button id="btnImport">Import backup</button>
           <button id="btnTheme">Toggle light/dark theme</button>
+          <button id="btnSignOut">Sign out</button>
         </div>
       </div>
       <input id="importFile" type="file" accept="application/json,.json" hidden>
@@ -99,6 +140,7 @@
   </main>
 
   <button id="fab" class="fab" title="New" aria-label="New">+</button>
+  </div>
 
   <dialog id="dlg">
     <form id="form">
@@ -130,6 +172,11 @@
     </form>
   </dialog>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"
+          integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o"
+          crossorigin="anonymous"></script>
+  <!-- Generated at deploy time from repository secrets; see README. -->
+  <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

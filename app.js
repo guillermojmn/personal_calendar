@@ -143,26 +143,125 @@ function sanitizeLog(obj) {
 }
 
 const asArray = (x) => (Array.isArray(x) ? x : []);
-const loadWithLegacy = (name, fallback) => load(KEYS[name], null) ?? load(LEGACY_KEYS[name], fallback);
-
-let events = asArray(loadWithLegacy('events', [])).filter(isValidEvent).map(normalizeEvent);
-let habits = asArray(loadWithLegacy('habits', [])).filter(isValidHabit);
-let habitLog = sanitizeLog(loadWithLegacy('habitLog', {}));
-let todos = asArray(load(KEYS.todos, [])).filter(isValidTodo);
-
-function save() {
-  const ok = [
-    store(KEYS.events, events),
-    store(KEYS.habits, habits),
-    store(KEYS.habitLog, habitLog),
-    store(KEYS.todos, todos),
-  ].every(Boolean);
-  if (!ok) alert('Your changes could not be saved in this browser. Export a backup so you don\'t lose them.');
-}
+const isUuid = (s) => typeof s === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
 function newId() {
-  return (crypto.randomUUID && crypto.randomUUID()) ||
-    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+// In-memory copy of the signed-in user's data. Empty until someone signs in.
+let events = [];
+let habits = [];
+let habitLog = {};
+let todos = [];
+let currentUser = null;
+
+// ---------- Supabase ----------
+// The URL and anon key come from config.js, generated from repository secrets at deploy
+// time. The anon key is public by design: access control is enforced by Row Level
+// Security, so each user can only read and write their own rows.
+
+const CONFIG = window.APP_CONFIG || {};
+// Read before the client consumes the URL hash of a password-reset link.
+const AUTH_HASH = new URLSearchParams(window.location.hash.slice(1));
+const sb = window.supabase && CONFIG.supabaseUrl && CONFIG.supabaseAnonKey
+  ? window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey)
+  : null;
+
+const T = { events: 'cal_events', habits: 'cal_habits', habitLog: 'cal_habit_log', todos: 'cal_todos' };
+const PAGE_SIZE = 1000; // Supabase returns at most 1000 rows per request.
+
+const eventToRow = (e) => ({
+  id: e.id,
+  title: e.title,
+  type: e.type,
+  date: e.date,
+  all_day: !!e.allDay,
+  start_time: e.start || null,
+  end_time: e.end || null,
+  repeat: e.repeat || 'none',
+  location: e.location || '',
+  notes: e.notes || '',
+  done: !!e.done,
+  done_on: e.doneOn || [],
+});
+const rowToEvent = (r) => normalizeEvent({
+  id: r.id,
+  title: r.title,
+  type: r.type,
+  date: r.date,
+  allDay: r.all_day,
+  start: r.start_time ? r.start_time.slice(0, 5) : '',
+  end: r.end_time ? r.end_time.slice(0, 5) : '',
+  repeat: r.repeat || 'none',
+  location: r.location || '',
+  notes: r.notes || '',
+  done: !!r.done,
+  doneOn: r.done_on || [],
+});
+const habitToRow = (h) => ({ id: h.id, title: h.title, since: h.since || null });
+const rowToHabit = (r) => ({ id: r.id, title: r.title, since: r.since || '' });
+const todoToRow = (t) => ({
+  id: t.id,
+  title: t.title,
+  due: t.due || null,
+  done: !!t.done,
+  done_at: t.doneAt ? new Date(t.doneAt).toISOString() : null,
+  created_at: new Date(t.createdAt || Date.now()).toISOString(),
+});
+const rowToTodo = (r) => ({
+  id: r.id,
+  title: r.title,
+  due: r.due || '',
+  done: !!r.done,
+  doneAt: r.done_at ? Date.parse(r.done_at) : null,
+  createdAt: Date.parse(r.created_at),
+});
+
+async function fetchAll(table, order) {
+  const rows = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    let q = sb.from(table).select('*');
+    for (const col of order) q = q.order(col);
+    const { data, error } = await q.range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    rows.push(...data);
+    if (data.length < PAGE_SIZE) return rows;
+  }
+}
+
+async function loadAll() {
+  const [ev, hb, lg, td] = await Promise.all([
+    fetchAll(T.events, ['id']),
+    fetchAll(T.habits, ['id']),
+    fetchAll(T.habitLog, ['day', 'habit_id']),
+    fetchAll(T.todos, ['id']),
+  ]);
+  events = ev.map(rowToEvent);
+  habits = hb.map(rowToHabit);
+  todos = td.map(rowToTodo);
+  habitLog = {};
+  for (const r of lg) (habitLog[r.day] ||= []).push(r.habit_id);
+}
+
+// Changes are applied locally right away; if the server rejects one, reload to stay in sync.
+async function persist(request) {
+  const { error } = await request;
+  if (!error) return;
+  console.error(error);
+  alert(`Could not save your change: ${error.message}`);
+  try {
+    await loadAll();
+    render();
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 // ---------- Events ----------
@@ -206,7 +305,7 @@ function toggleDone(ev, key) {
     set.has(key) ? set.delete(key) : set.add(key);
     ev.doneOn = [...set];
   }
-  save();
+  persist(sb.from(T.events).update({ done: !!ev.done, done_on: ev.doneOn || [] }).eq('id', ev.id));
   render();
 }
 
@@ -222,17 +321,21 @@ const habitDone = (h, key) => (habitLog[key] || []).includes(h.id);
 
 function toggleHabit(h, key) {
   const set = new Set(habitLog[key] || []);
-  set.has(h.id) ? set.delete(h.id) : set.add(h.id);
+  const adding = !set.has(h.id);
+  adding ? set.add(h.id) : set.delete(h.id);
   if (set.size) habitLog[key] = [...set];
   else delete habitLog[key];
-  save();
+  persist(adding
+    ? sb.from(T.habitLog).insert({ habit_id: h.id, day: key })
+    : sb.from(T.habitLog).delete().eq('habit_id', h.id).eq('day', key));
   render();
 }
 
 function addHabit(title) {
   const today = todayKey();
-  habits.push({ id: newId(), title, since: selected < today ? selected : today });
-  save();
+  const h = { id: newId(), title, since: selected < today ? selected : today };
+  habits.push(h);
+  persist(sb.from(T.habits).insert(habitToRow(h)));
   render();
 }
 
@@ -243,7 +346,8 @@ function removeHabit(h) {
     habitLog[key] = habitLog[key].filter((id) => id !== h.id);
     if (!habitLog[key].length) delete habitLog[key];
   }
-  save();
+  // Its log rows are removed by the database (on delete cascade).
+  persist(sb.from(T.habits).delete().eq('id', h.id));
   render();
 }
 
@@ -253,21 +357,30 @@ function removeHabit(h) {
 let editingTodo = null;
 
 function addTodo(title, due) {
-  todos.push({ id: newId(), title, due: due || '', done: false, createdAt: Date.now() });
-  save();
+  const t = { id: newId(), title, due: due || '', done: false, createdAt: Date.now() };
+  todos.push(t);
+  persist(sb.from(T.todos).insert(todoToRow(t)));
   renderTodos();
 }
 
 function toggleTodo(t) {
   t.done = !t.done;
   t.doneAt = t.done ? Date.now() : null;
-  save();
+  persist(sb.from(T.todos).update({ done: t.done, done_at: t.doneAt ? new Date(t.doneAt).toISOString() : null }).eq('id', t.id));
   renderTodos();
 }
 
 function removeTodo(t) {
   todos = todos.filter((x) => x !== t);
-  save();
+  persist(sb.from(T.todos).delete().eq('id', t.id));
+  renderTodos();
+}
+
+function clearDoneTodos() {
+  const ids = todos.filter((t) => t.done).map((t) => t.id);
+  if (!ids.length) return;
+  todos = todos.filter((t) => !t.done);
+  persist(sb.from(T.todos).delete().in('id', ids));
   renderTodos();
 }
 
@@ -678,7 +791,7 @@ function renderTodoItem(t) {
       if (value) {
         t.title = value;
         t.due = due.value;
-        save();
+        persist(sb.from(T.todos).update({ title: t.title, due: t.due || null }).eq('id', t.id));
       }
       editingTodo = null;
       renderTodos();
@@ -832,12 +945,14 @@ form.addEventListener('submit', (e) => {
     notes: f.notes.value.trim(),
   };
 
-  if (editing) {
-    Object.assign(editing, data);
+  let target = editing;
+  if (target) {
+    Object.assign(target, data);
   } else {
-    events.push({ id: newId(), done: false, doneOn: [], ...data });
+    target = { id: newId(), done: false, doneOn: [], ...data };
+    events.push(target);
   }
-  save();
+  persist(sb.from(T.events).upsert(eventToRow(target)));
   dlg.close();
   selected = data.date;
   render();
@@ -849,8 +964,9 @@ $('btnDelete').addEventListener('click', () => {
   if (!editing) return;
   const extra = editing.repeat && editing.repeat !== 'none' ? ' (all repetitions will be deleted)' : '';
   if (!confirm(`Delete “${editing.title}”${extra}?`)) return;
+  const id = editing.id;
   events = events.filter((ev) => ev !== editing);
-  save();
+  persist(sb.from(T.events).delete().eq('id', id));
   dlg.close();
   render();
 });
@@ -867,40 +983,90 @@ function exportData() {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-function mergeById(current, incoming) {
-  const byId = new Map(current.map((x) => [x.id, x]));
-  for (const x of incoming) byId.set(x.id, x);
-  return [...byId.values()];
+function parseBackup(src) {
+  // The first backup format was a plain list of events.
+  if (Array.isArray(src)) src = { events: src };
+  if (!src || typeof src !== 'object') src = {};
+  return {
+    events: asArray(src.events).filter(isValidEvent).map(normalizeEvent),
+    habits: asArray(src.habits).filter(isValidHabit),
+    habitLog: sanitizeLog(src.habitLog),
+    todos: asArray(src.todos).filter(isValidTodo),
+  };
+}
+
+const backupSize = (b) => b.events.length + b.habits.length + b.todos.length;
+
+// Upserts a backup (or data saved in this browser by older versions) into the account.
+async function importIntoAccount(b) {
+  // The database uses UUIDs; data from very old versions may have other ids.
+  const habitIds = new Map();
+  for (const h of b.habits) {
+    const id = isUuid(h.id) ? h.id : newId();
+    habitIds.set(h.id, id);
+    h.id = id;
+  }
+  for (const x of [...b.events, ...b.todos]) if (!isUuid(x.id)) x.id = newId();
+
+  const writes = [];
+  if (b.events.length) writes.push(sb.from(T.events).upsert(b.events.map(eventToRow)));
+  if (b.habits.length) writes.push(sb.from(T.habits).upsert(b.habits.map(habitToRow)));
+  if (b.todos.length) writes.push(sb.from(T.todos).upsert(b.todos.map(todoToRow)));
+  for (const { error } of await Promise.all(writes)) if (error) throw error;
+
+  // Log rows go last: they must point at routine items that already exist.
+  const known = new Set([...habits.map((h) => h.id), ...b.habits.map((h) => h.id)]);
+  const logRows = Object.entries(b.habitLog).flatMap(([day, ids]) => ids
+    .map((id) => habitIds.get(id) || id)
+    .filter((id) => known.has(id))
+    .map((habit_id) => ({ habit_id, day })));
+  if (logRows.length) {
+    const { error } = await sb.from(T.habitLog).upsert(logRows, { onConflict: 'habit_id,day', ignoreDuplicates: true });
+    if (error) throw error;
+  }
+
+  await loadAll();
+  render();
 }
 
 function importData(file) {
   const reader = new FileReader();
-  reader.onload = () => {
-    let data;
+  reader.onload = async () => {
+    let b;
     try {
-      data = JSON.parse(reader.result);
+      b = parseBackup(JSON.parse(reader.result));
     } catch {
       return alert('This file is not a valid backup.');
     }
-    // The first backup format was a plain list of events.
-    const src = Array.isArray(data) ? { events: data } : (data && typeof data === 'object' ? data : {});
-    const newEvents = asArray(src.events).filter(isValidEvent).map(normalizeEvent);
-    const newHabits = asArray(src.habits).filter(isValidHabit);
-    const newLog = sanitizeLog(src.habitLog);
-    const newTodos = asArray(src.todos).filter(isValidTodo);
-    if (!newEvents.length && !newHabits.length && !newTodos.length) return alert('This file contains no data.');
-    if (!confirm(`Import ${newEvents.length} events, ${newTodos.length} to-dos and ${newHabits.length} routine items, merging them with your current data?`)) return;
-
-    events = mergeById(events, newEvents);
-    habits = mergeById(habits, newHabits);
-    todos = mergeById(todos, newTodos);
-    for (const [k, ids] of Object.entries(newLog)) {
-      habitLog[k] = [...new Set([...(habitLog[k] || []), ...ids])];
+    if (!backupSize(b)) return alert('This file contains no data.');
+    if (!confirm(`Import ${b.events.length} events, ${b.todos.length} to-dos and ${b.habits.length} routine items into your account?`)) return;
+    try {
+      await importIntoAccount(b);
+    } catch (e) {
+      console.error(e);
+      alert(`The import failed: ${e.message || e}`);
     }
-    save();
-    render();
   };
   reader.readAsText(file);
+}
+
+// Earlier versions kept everything in this browser. Offer to move it into the account once.
+const LOCAL_DATA_KEYS = [KEYS.events, KEYS.habits, KEYS.habitLog, KEYS.todos, ...Object.values(LEGACY_KEYS)];
+
+async function migrateLocalData() {
+  const b = parseBackup({
+    events: load(KEYS.events, null) ?? load(LEGACY_KEYS.events, []),
+    habits: load(KEYS.habits, null) ?? load(LEGACY_KEYS.habits, []),
+    habitLog: load(KEYS.habitLog, null) ?? load(LEGACY_KEYS.habitLog, {}),
+    todos: load(KEYS.todos, []),
+  });
+  const n = backupSize(b);
+  if (!n) return;
+  if (!confirm(`This browser has ${n} items saved before sign-in was added. Upload them to your account?\n\n(Cancel keeps them here and asks again next time.)`)) return;
+  await importIntoAccount(b);
+  for (const k of LOCAL_DATA_KEYS) {
+    try { localStorage.removeItem(k); } catch { /* ignore */ }
+  }
 }
 
 // ---------- Theme ----------
@@ -909,6 +1075,117 @@ function toggleTheme() {
   const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
   store(KEYS.theme, next);
+}
+
+// ---------- Auth ----------
+
+function showScreen(name) {
+  $('loading').hidden = name !== 'loading';
+  $('auth').hidden = !['login', 'recovery', 'config'].includes(name);
+  $('loginForm').hidden = name !== 'login';
+  $('recoveryForm').hidden = name !== 'recovery';
+  $('configError').hidden = name !== 'config';
+  $('app').hidden = name !== 'app';
+}
+
+function authMessage(id, text, ok = false) {
+  const p = $(id);
+  p.textContent = text;
+  p.hidden = !text;
+  p.classList.toggle('ok', ok);
+}
+
+async function startApp(user) {
+  if (currentUser && currentUser.id === user.id) return;
+  currentUser = user;
+  $('menuUser').textContent = user.email || '';
+  showScreen('loading');
+  try {
+    await loadAll();
+    await migrateLocalData();
+  } catch (e) {
+    console.error(e);
+    alert(`Could not load your data: ${e.message || e}`);
+  }
+  selected = todayKey();
+  showScreen('app');
+  render();
+}
+
+function stopApp() {
+  currentUser = null;
+  events = [];
+  habits = [];
+  habitLog = {};
+  todos = [];
+  if (dlg.open) dlg.close();
+  render(); // clear what was on screen
+  showScreen('login');
+}
+
+function initAuth() {
+  $('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target.elements;
+    const button = e.target.querySelector('[type="submit"]');
+    authMessage('loginMsg', '');
+    button.disabled = true;
+    const { data, error } = await sb.auth.signInWithPassword({ email: f.email.value.trim(), password: f.password.value });
+    button.disabled = false;
+    if (error) return authMessage('loginMsg', error.message === 'Invalid login credentials' ? 'Wrong email or password.' : error.message);
+    f.password.value = '';
+    startApp(data.user);
+  });
+
+  $('btnForgot').addEventListener('click', async () => {
+    const email = $('loginForm').elements.email.value.trim();
+    if (!email) return authMessage('loginMsg', 'Type your email above first.');
+    // GitHub Pages serves the app from a sub-path, so redirect back to this exact page.
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname,
+    });
+    if (error) return authMessage('loginMsg', error.message);
+    authMessage('loginMsg', 'If that account exists, you\'ll get an email with a link to set a new password.', true);
+  });
+
+  $('recoveryForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target.elements;
+    if (f.password.value !== f.confirm.value) return authMessage('recoveryMsg', 'The passwords don\'t match.');
+    const { data, error } = await sb.auth.updateUser({ password: f.password.value });
+    if (error) return authMessage('recoveryMsg', error.message);
+    f.password.value = '';
+    f.confirm.value = '';
+    history.replaceState(null, '', window.location.pathname);
+    startApp(data.user);
+  });
+
+  $('btnSignOut').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    stopApp();
+  });
+
+  // Keep this callback synchronous: awaiting Supabase calls inside it can deadlock the client.
+  sb.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') showScreen('recovery');
+    else if (event === 'SIGNED_OUT' && currentUser) stopApp();
+  });
+}
+
+async function boot() {
+  init();
+  if (!sb) return showScreen('config');
+  initAuth();
+
+  if (AUTH_HASH.get('type') === 'recovery') return showScreen('recovery');
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) return startApp(session.user);
+  showScreen('login');
+  const linkError = AUTH_HASH.get('error_description');
+  if (linkError) {
+    authMessage('loginMsg', linkError);
+    history.replaceState(null, '', window.location.pathname);
+  }
 }
 
 // ---------- Startup ----------
@@ -960,11 +1237,7 @@ function init() {
     f.due.value = '';
     f.title.focus();
   });
-  $('btnClearDone').addEventListener('click', () => {
-    todos = todos.filter((t) => !t.done);
-    save();
-    renderTodos();
-  });
+  $('btnClearDone').addEventListener('click', clearDoneTodos);
 
   $('habitForm').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -992,7 +1265,7 @@ function init() {
   window.matchMedia('(max-width: 600px)').addEventListener('change', renderTitle);
 
   document.addEventListener('keydown', (e) => {
-    if (dlg.open || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!currentUser || dlg.open || e.ctrlKey || e.metaKey || e.altKey) return;
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
     const k = e.key.toLowerCase();
     if (e.key === 'ArrowLeft') shift(-1);
@@ -1007,7 +1280,7 @@ function init() {
   // Every minute: move the "now" line and refresh "today" after midnight.
   let lastToday = todayKey();
   setInterval(() => {
-    if (dlg.open) return;
+    if (!currentUser || dlg.open) return;
     if (todayKey() !== lastToday) {
       lastToday = todayKey();
       render();
@@ -1015,8 +1288,6 @@ function init() {
       render();
     }
   }, 60 * 1000);
-
-  render();
 }
 
-init();
+boot();

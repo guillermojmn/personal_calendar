@@ -395,6 +395,49 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .link-btn { background: none; border: 0; padding: 8px 0 0; color: var(--muted); font-size: .8rem; text-decoration: underline; cursor: pointer; }
 .link-btn:hover { color: var(--text); }
 
+/* ---------- Sign-in ---------- */
+.loading { display: grid; place-items: center; min-height: 100vh; color: var(--muted); }
+.loading[hidden], .auth[hidden], #app[hidden] { display: none; }
+.auth { display: grid; place-items: center; min-height: 100vh; padding: 24px 16px; }
+.auth-card {
+  width: min(380px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.auth-card[hidden] { display: none; }
+.auth-logo { font-size: 2.2rem; line-height: 1; text-align: center; }
+.auth-card h1 { margin: 0; font-size: 1.3rem; text-align: center; }
+.auth-sub { margin: -6px 0 4px; color: var(--muted); text-align: center; font-size: .9rem; }
+.auth-card label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); }
+.auth-card input {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 16px;
+}
+.auth-card .btn.primary { padding: 10px; }
+.auth-card .link-btn { align-self: center; padding-top: 0; }
+.auth-msg { margin: 0; font-size: .88rem; color: var(--danger); }
+.auth-msg.ok { color: var(--t-task); }
+.menu-user {
+  padding: 6px 10px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: .8rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-user:empty { display: none; }
+
 /* ---------- Dialog ---------- */
 dialog {
   border: 1px solid var(--border);

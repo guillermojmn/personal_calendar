@@ -1,6 +1,6 @@
 # Personal Calendar
 
-A simple personal calendar for appointments, tasks, reminders and a daily routine. It runs entirely in the browser — no account, no server, no installation.
+A simple personal calendar for appointments, tasks, reminders and a daily routine. Sign in with email and password; each user's data is private and synced across devices.
 
 🔗 **Open the app: https://guillermojmn.github.io/personal_calendar/**
 
@@ -14,6 +14,7 @@ A simple personal calendar for appointments, tasks, reminders and a daily routin
 - **Daily routine:** things to do every day (e.g. drink 2 L of water), with a progress bar. The month view shows a ✓ on days you completed it.
 - **Search** by title, notes or location.
 - Light / dark theme and mobile-friendly layout.
+- Sign-in with email + password; data synced across devices.
 
 ## How to use
 
@@ -23,12 +24,21 @@ A simple personal calendar for appointments, tasks, reminders and a daily routin
 - **Click** any item → edit or delete it.
 - Shortcuts: `←` / `→` previous / next, `T` today, `M` month, `W` week, `D` day, `N` new.
 
-## Where is my data stored?
+## Data and security
 
-Everything is stored **in your browser** (localStorage) on each device. Nothing is uploaded anywhere and nothing is saved in this repository, so data is not synced between devices.
+- Data is stored in [Supabase](https://supabase.com) (PostgreSQL). Nothing is stored in this repository.
+- Sign-in uses Supabase Auth with email + password. Public sign-up is disabled, so only existing accounts can sign in.
+- Every table has a `user_id` column and **Row Level Security**: each user can only read and write their own rows. Signed-out visitors can't access any data.
+- The frontend only uses the Supabase **anon** key, which is public by design; the `service_role` key is never used.
+- **⋯ → Export backup** downloads all your data as a `.json` file, which **Import backup** can load back.
 
-Use **⋯ → Export backup** from time to time to download a `.json` file. You can load it back with **Import backup** — this is also how you move your data to another device or browser.
+## Setup
+
+1. **Database:** run [`supabase/schema.sql`](supabase/schema.sql) in the Supabase SQL editor. It creates the `cal_*` tables and their RLS policies.
+2. **Auth:** in Supabase → Authentication → URL Configuration, add the app URL to the *Redirect URLs* (used by the password-reset link).
+3. **Secrets:** in GitHub → Settings → Secrets and variables → Actions, add `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
+4. **Pages:** in GitHub → Settings → Pages, set *Source* to **GitHub Actions**. Every push to `main` deploys the site via [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), which writes `config.js` from the secrets.
 
 ## Run locally
 
-Clone the repository and open `index.html` in any modern browser.
+Copy `config.example.js` to `config.js`, fill in your project URL and anon key, then serve the folder (e.g. `npx serve .`) and open it in the browser. `config.js` is git-ignored.

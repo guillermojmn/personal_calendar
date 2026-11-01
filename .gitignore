@@ -6,3 +6,6 @@ calendario-*.json
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Local Supabase config (generated from secrets when deployed)
+config.js
