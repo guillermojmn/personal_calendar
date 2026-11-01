@@ -34,6 +34,10 @@ jobs:
           fi
           mkdir -p dist
           cp index.html app.js styles.css dist/
+          # Version asset URLs so browsers never mix new HTML with cached old files.
+          v="${GITHUB_SHA::8}"
+          sed -i -E "s#(href|src)=\"(styles\.css|config\.js|app\.js)\"#\1=\"\2?v=$v\"#g" dist/index.html
+          grep -q "app.js?v=$v" dist/index.html
           jq -rn --arg url "$SUPABASE_URL" --arg key "$SUPABASE_ANON_KEY" \
             '"window.APP_CONFIG = " + ({supabaseUrl: $url, supabaseAnonKey: $key} | tojson) + ";"' \
             > dist/config.js

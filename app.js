@@ -170,8 +170,18 @@ let currentUser = null;
 const CONFIG = window.APP_CONFIG || {};
 // Read before the client consumes the URL hash of a password-reset link.
 const AUTH_HASH = new URLSearchParams(window.location.hash.slice(1));
+// supabase-js serialises auth work with the browser's Web Locks API, which can hang
+// forever in some browsers and leave the app stuck on "Loading…". A simple per-tab
+// queue is enough here.
+let authQueue = Promise.resolve();
+function tabLock(name, timeout, fn) {
+  const run = authQueue.then(fn, fn);
+  authQueue = run.catch(() => {});
+  return run;
+}
+
 const sb = window.supabase && CONFIG.supabaseUrl && CONFIG.supabaseAnonKey
-  ? window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey)
+  ? window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey, { auth: { lock: tabLock } })
   : null;
 
 const T = { events: 'cal_events', habits: 'cal_habits', habitLog: 'cal_habit_log', todos: 'cal_todos' };
@@ -1175,6 +1185,10 @@ function initAuth() {
 async function boot() {
   init();
   if (!sb) return showScreen('config');
+  // Never leave the user staring at "Loading…" if the network or Supabase misbehaves.
+  setTimeout(() => {
+    if (!$('loading').hidden) $('loading').textContent = 'This is taking longer than usual. Check your connection and reload the page.';
+  }, 15000);
   initAuth();
 
   if (AUTH_HASH.get('type') === 'recovery') return showScreen('recovery');
