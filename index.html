@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#171a23">
+  <meta name="theme-color" content="#000000">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <title>Personal Calendar</title>
@@ -80,10 +80,13 @@
           <div id="menuUser" class="menu-user"></div>
           <button id="btnExport">Export backup</button>
           <button id="btnImport">Import backup</button>
-          <button id="btnTheme">Toggle light/dark theme</button>
           <button id="btnSignOut">Sign out</button>
         </div>
       </div>
+      <button id="btnTheme" class="icon-btn theme-toggle" type="button" title="Switch light/dark" aria-label="Switch to dark theme">
+        <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.8v2.4M12 19.8v2.4M4.8 4.8l1.7 1.7M17.5 17.5l1.7 1.7M1.8 12h2.4M19.8 12h2.4M4.8 19.2l1.7-1.7M17.5 6.5l1.7-1.7"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8.5 8.5 0 1 0 11.1 11.1Z"/></svg>
+      </button>
       <input id="importFile" type="file" accept="application/json,.json" hidden>
     </div>
   </header>
@@ -105,18 +108,32 @@
 
       <div class="panel">
         <div class="panel-head">
-          <h2>To do <span id="todoCount" class="habit-count"></span></h2>
+          <h2>To do <span id="todoCount" class="count-badge"></span></h2>
+        </div>
+        <div id="todoProgress" class="todo-progress" hidden>
+          <div class="todo-progress-bar"><div id="todoProgressFill"></div></div>
+          <span id="todoProgressText"></span>
         </div>
         <form id="todoForm" class="todo-form">
-          <input name="title" maxlength="160" autocomplete="off" placeholder="Something to remember…" aria-label="New to-do">
-          <input name="due" type="date" title="Due date (optional)" aria-label="Due date (optional)">
-          <button class="btn small" type="submit">Add</button>
+          <div class="todo-input">
+            <input name="title" maxlength="160" autocomplete="off" placeholder="Something to remember…" aria-label="New to-do">
+            <button class="todo-add" type="submit" title="Add" aria-label="Add to-do">+</button>
+          </div>
+          <div class="due-picker" role="group" aria-label="Due date (optional)">
+            <button class="due-chip" type="button" data-due="today" aria-pressed="false">Today</button>
+            <button class="due-chip" type="button" data-due="tomorrow" aria-pressed="false">Tomorrow</button>
+            <label id="todoDateChip" class="due-chip">
+              <span id="todoDateLabel">Pick date</span>
+              <input name="due" type="date" aria-label="Pick a due date">
+            </label>
+            <button id="todoDateClear" class="due-clear" type="button" title="Remove date" aria-label="Remove date" hidden>×</button>
+          </div>
         </form>
         <ul id="todoList" class="list"></ul>
         <details id="todoDone" class="todo-done" hidden>
-          <summary id="todoDoneSummary"></summary>
+          <summary><span id="todoDoneSummary"></span></summary>
           <ul id="todoDoneList" class="list"></ul>
-          <button id="btnClearDone" class="link-btn" type="button">Clear done</button>
+          <button id="btnClearDone" class="link-btn" type="button">Clear all done</button>
         </details>
       </div>
 
@@ -171,6 +188,11 @@
       </div>
     </form>
   </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden>
+    <span id="toastText"></span>
+    <button id="toastAction" type="button"></button>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"
           integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o"

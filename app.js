@@ -365,12 +365,15 @@ function removeHabit(h) {
 // One-off things to remember, optionally with a due date; separate from the daily routine.
 
 let editingTodo = null;
+let newTodoId = null; // the item that just got added, so only it animates in
 
 function addTodo(title, due) {
   const t = { id: newId(), title, due: due || '', done: false, createdAt: Date.now() };
   todos.push(t);
   persist(sb.from(T.todos).insert(todoToRow(t)));
+  newTodoId = t.id;
   renderTodos();
+  newTodoId = null;
 }
 
 function toggleTodo(t) {
@@ -380,18 +383,59 @@ function toggleTodo(t) {
   renderTodos();
 }
 
+// Puts deleted to-dos back (same ids), for the toast's Undo button.
+function restoreTodos(items) {
+  const known = new Set(todos.map((t) => t.id));
+  const back = items.filter((t) => !known.has(t.id));
+  if (!back.length) return;
+  todos.push(...back);
+  persist(sb.from(T.todos).upsert(back.map(todoToRow)));
+  renderTodos();
+}
+
 function removeTodo(t) {
   todos = todos.filter((x) => x !== t);
   persist(sb.from(T.todos).delete().eq('id', t.id));
   renderTodos();
+  showToast(`Deleted “${t.title}”`, 'Undo', () => restoreTodos([t]));
 }
 
 function clearDoneTodos() {
-  const ids = todos.filter((t) => t.done).map((t) => t.id);
-  if (!ids.length) return;
+  const removed = todos.filter((t) => t.done);
+  if (!removed.length) return;
   todos = todos.filter((t) => !t.done);
-  persist(sb.from(T.todos).delete().in('id', ids));
+  persist(sb.from(T.todos).delete().in('id', removed.map((t) => t.id)));
   renderTodos();
+  showToast(`Cleared ${removed.length} done`, 'Undo', () => restoreTodos(removed));
+}
+
+// ----- Toast -----
+
+let toastTimer = null;
+
+function showToast(text, actionLabel, onAction) {
+  const toast = $('toast');
+  const action = $('toastAction');
+  $('toastText').textContent = text;
+  action.textContent = actionLabel || '';
+  action.hidden = !onAction;
+  action.onclick = () => {
+    hideToast();
+    onAction();
+  };
+  toast.hidden = false;
+  void toast.offsetWidth; // start from the hidden state so the slide-in plays
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, 6000);
+}
+
+function hideToast() {
+  clearTimeout(toastTimer);
+  const toast = $('toast');
+  toast.classList.remove('show');
+  toast.hidden = true;
+  $('toastAction').onclick = null;
 }
 
 // Dated items first (overdue at the top), then undated ones in the order they were added.
@@ -405,13 +449,31 @@ function shortDate(key) {
   return `${WEEKDAYS[d.getDay()].slice(0, 3)}, ${MONTHS[d.getMonth()].slice(0, 3)} ${d.getDate()}`;
 }
 
+// Whole days from today to the given date key (negative = in the past).
+function daysFromToday(key) {
+  return Math.round((fromKey(key) - fromKey(todayKey())) / 86400000);
+}
+
+// A short, relative label for a to-do's due date ("Yesterday", "3 days late", "Friday"…).
 function dueInfo(t) {
   if (!t.due) return null;
+  const n = daysFromToday(t.due);
+  const date = shortDate(t.due);
+  // Pending items due today sit under the "Today" heading, so they need no label.
+  if (n === 0) return t.done ? { text: 'Today', cls: '', title: date } : null;
+  if (n < 0 && !t.done) return { text: n === -1 ? 'Yesterday' : `${-n} days late`, cls: 'overdue', title: date };
+  if (n === 1) return { text: 'Tomorrow', cls: 'soon', title: date };
+  if (n > 1 && n < 7) return { text: WEEKDAYS[fromKey(t.due).getDay()], cls: '', title: date };
+  return { text: date, cls: '', title: n > 0 ? `In ${n} days` : '' };
+}
+
+const TODO_GROUPS = { overdue: 'Overdue', today: 'Today', upcoming: 'Upcoming', anytime: 'Anytime' };
+
+function todoGroup(t) {
+  if (!t.due) return 'anytime';
   const today = todayKey();
-  if (t.due === today) return { text: 'Today', cls: 'today' };
-  if (t.due < today && !t.done) return { text: `Overdue · ${shortDate(t.due)}`, cls: 'overdue' };
-  if (t.due === toKey(addDays(fromKey(today), 1))) return { text: 'Tomorrow', cls: '' };
-  return { text: shortDate(t.due), cls: '' };
+  if (t.due < today) return 'overdue';
+  return t.due === today ? 'today' : 'upcoming';
 }
 
 // ---------- View state ----------
@@ -443,7 +505,7 @@ function render() {
     renderTimeGrid(Array.from({ length: 7 }, (_, i) => toKey(addDays(start, i))));
   } else renderTimeGrid([selected]);
   renderDay();
-  renderTodos();
+  if (!editingTodo) renderTodos(); // don't throw away an edit in progress
   renderHabits();
   renderUpcoming();
 }
@@ -780,8 +842,9 @@ function renderUpcoming() {
 }
 
 function renderTodoItem(t) {
-  const li = el('li', 'todo');
+  const li = el('li', `todo g-${t.done ? 'done' : todoGroup(t)}`);
   if (t.done) li.classList.add('done');
+  if (t.id === newTodoId) li.classList.add('new');
 
   if (editingTodo === t.id) {
     const f = el('form', 'todo-edit');
@@ -793,8 +856,14 @@ function renderTodoItem(t) {
     due.type = 'date';
     due.value = t.due || '';
     due.setAttribute('aria-label', 'Due date (optional)');
-    const ok = el('button', 'btn small', 'Save');
-    f.append(title, due, ok);
+    const cancel = el('button', 'btn small', 'Cancel');
+    cancel.type = 'button';
+    cancel.addEventListener('click', () => {
+      editingTodo = null;
+      renderTodos();
+    });
+    const ok = el('button', 'btn small primary', 'Save');
+    f.append(title, due, cancel, ok);
     f.addEventListener('submit', (e) => {
       e.preventDefault();
       const value = title.value.trim();
@@ -821,8 +890,15 @@ function renderTodoItem(t) {
   const cb = el('input');
   cb.type = 'checkbox';
   cb.checked = !!t.done;
-  cb.title = 'Mark as done';
-  cb.addEventListener('change', () => toggleTodo(t));
+  cb.title = t.done ? 'Mark as not done' : 'Mark as done';
+  cb.setAttribute('aria-label', `${cb.title}: ${t.title}`);
+  cb.addEventListener('change', () => {
+    if (t.done || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return toggleTodo(t);
+    // Let the tick and strike-through play before the item moves to "Done".
+    cb.disabled = true;
+    li.classList.add('completing');
+    setTimeout(() => toggleTodo(t), 420);
+  });
 
   const body = el('div', 'body');
   const title = el('div', 'todo-title', t.title);
@@ -833,7 +909,11 @@ function renderTodoItem(t) {
   });
   body.appendChild(title);
   const due = dueInfo(t);
-  if (due) body.appendChild(el('div', `due ${due.cls}`.trim(), due.text));
+  if (due) {
+    const pill = el('span', `due ${due.cls}`.trim(), due.text);
+    if (due.title) pill.title = due.title;
+    body.appendChild(pill);
+  }
 
   const remove = el('button', 'x', '×');
   remove.type = 'button';
@@ -850,16 +930,55 @@ function renderTodos() {
   const done = todos.filter((t) => t.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
   $('todoCount').textContent = pending.length ? String(pending.length) : '';
 
+  // Today's progress: what was ticked off today against what is still open.
+  const today = todayKey();
+  const doneToday = done.filter((t) => t.doneAt && toKey(new Date(t.doneAt)) === today).length;
+  const total = pending.length + doneToday;
+  $('todoProgress').hidden = !doneToday;
+  $('todoProgressFill').style.width = total ? `${Math.round((doneToday / total) * 100)}%` : '0';
+  $('todoProgressText').textContent = pending.length
+    ? `${doneToday} of ${total} done today`
+    : `All ${doneToday} done today 🎉`;
+
   const list = $('todoList');
   list.replaceChildren();
-  if (!pending.length) list.appendChild(el('li', 'empty', 'Nothing pending. Jot down anything you need to remember.'));
-  for (const t of pending) list.appendChild(renderTodoItem(t));
+  if (!pending.length) {
+    const empty = el('li', 'todo-empty');
+    empty.append(
+      el('div', 'todo-empty-icon', '✓'),
+      el('strong', '', done.length ? 'All caught up' : 'Nothing pending'),
+      el('span', '', 'Jot down anything you need to remember.'),
+    );
+    list.appendChild(empty);
+  }
+  for (const [group, label] of Object.entries(TODO_GROUPS)) {
+    const items = pending.filter((t) => todoGroup(t) === group);
+    if (!items.length) continue;
+    const head = el('li', `group todo-group ${group}`, label);
+    head.appendChild(el('span', 'todo-group-count', items.length));
+    list.appendChild(head);
+    for (const t of items) list.appendChild(renderTodoItem(t));
+  }
 
   $('todoDone').hidden = !done.length;
-  $('todoDoneSummary').textContent = `Done (${done.length})`;
+  $('todoDoneSummary').textContent = `Completed · ${done.length}`;
   const doneList = $('todoDoneList');
   doneList.replaceChildren();
   for (const t of done) doneList.appendChild(renderTodoItem(t));
+  syncDuePicker();
+}
+
+// Highlights the due date currently chosen for the next to-do.
+function syncDuePicker() {
+  const due = $('todoForm').elements.due.value;
+  const dates = { today: todayKey(), tomorrow: toKey(addDays(fromKey(todayKey()), 1)) };
+  for (const b of document.querySelectorAll('.due-chip[data-due]')) {
+    b.setAttribute('aria-pressed', String(due === dates[b.dataset.due]));
+  }
+  const custom = !!due && !Object.values(dates).includes(due);
+  $('todoDateChip').classList.toggle('active', custom);
+  $('todoDateLabel').textContent = custom ? shortDate(due) : 'Pick date';
+  $('todoDateClear').hidden = !custom;
 }
 
 // ----- Navigation -----
@@ -1081,10 +1200,18 @@ async function migrateLocalData() {
 
 // ---------- Theme ----------
 
+// Keeps the sun/moon button's label and the browser bar colour in step with the theme.
+function syncThemeUi() {
+  const dark = document.documentElement.dataset.theme === 'dark';
+  $('btnTheme').setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+  document.querySelector('meta[name="theme-color"]').content = dark ? '#000000' : '#ffffff';
+}
+
 function toggleTheme() {
   const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
   store(KEYS.theme, next);
+  syncThemeUi();
 }
 
 // ---------- Auth ----------
@@ -1128,6 +1255,8 @@ function stopApp() {
   habits = [];
   habitLog = {};
   todos = [];
+  editingTodo = null;
+  hideToast();
   if (dlg.open) dlg.close();
   render(); // clear what was on screen
   showScreen('login');
@@ -1249,7 +1378,24 @@ function init() {
     addTodo(title, f.due.value);
     f.title.value = '';
     f.due.value = '';
+    syncDuePicker();
     f.title.focus();
+  });
+  const dueInput = $('todoForm').elements.due;
+  for (const b of document.querySelectorAll('.due-chip[data-due]')) {
+    b.addEventListener('click', () => {
+      const date = b.dataset.due === 'today' ? todayKey() : toKey(addDays(fromKey(todayKey()), 1));
+      dueInput.value = dueInput.value === date ? '' : date;
+      syncDuePicker();
+    });
+  }
+  dueInput.addEventListener('change', syncDuePicker);
+  dueInput.addEventListener('click', () => {
+    try { dueInput.showPicker(); } catch { /* the browser opens its own picker */ }
+  });
+  $('todoDateClear').addEventListener('click', () => {
+    dueInput.value = '';
+    syncDuePicker();
   });
   $('btnClearDone').addEventListener('click', clearDoneTodos);
 
@@ -1271,6 +1417,7 @@ function init() {
   $('btnExport').addEventListener('click', exportData);
   $('btnImport').addEventListener('click', () => $('importFile').click());
   $('btnTheme').addEventListener('click', toggleTheme);
+  syncThemeUi();
   $('importFile').addEventListener('change', (e) => {
     if (e.target.files[0]) importData(e.target.files[0]);
     e.target.value = '';
